@@ -25,7 +25,7 @@ LETISTE_FILTR = ["Praha", "Brno", "Ostrava"]
 # Diagnostika: když je True, u Exim Tours a Fischer se do logu vypíše
 # ukázka skutečně nalezených odkazů na stránce. Slouží k jednorázovému
 # doladění rozpoznávacího vzoru - po doladění vrať na False.
-DIAGNOSTIKA_ODKAZU = True
+DIAGNOSTIKA_ODKAZU = False
 
 # Filtr cílových destinací (whitelist). Vyplníš-li, projdou POUZE nabídky
 # obsahující některé z těchto slov. Prázdný seznam ([]) = vypnuto.
@@ -386,8 +386,26 @@ def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
         if not detail_pattern.search(href):
             continue
         title = a.get_text(strip=True) or "Nabídka last minute"
-        card = a.find_parent(["article", "li", "div"]) or a
-        card_text = card.get_text(" ", strip=True)[:400]
+
+        # Text karty: nejbližší rodič často obsahuje jen název hotelu.
+        # Informace o termínu/letišti/ceně jsou ve větším nadřazeném bloku,
+        # proto lezeme po rodičích nahoru, dokud text nezačne obsahovat cenu
+        # (Kč) nebo datum, nebo dokud nedosáhneme rozumné velikosti.
+        card_text = ""
+        node = a
+        for _ in range(6):  # max 6 úrovní nahoru
+            parent = node.find_parent(["article", "li", "div", "section"])
+            if parent is None:
+                break
+            text = parent.get_text(" ", strip=True)
+            node = parent
+            if ("Kč" in text) or re.search(r"\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}", text):
+                card_text = text[:400]
+                break
+            card_text = text[:400]  # zapamatuj poslední (kdyby cena nikde nebyla)
+
+        if not card_text:
+            card_text = (a.get_text(" ", strip=True) or "")[:400]
         if len(card_text) < min_text_len:
             continue
         results.append((href, title, card_text))
