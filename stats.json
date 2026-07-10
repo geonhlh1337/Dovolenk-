@@ -1,7 +1,13 @@
 {
 "week": "2026-W28",
-"novych": 0,
-"zlevneni": 0,
-"nejvetsi_sleva": null,
-"nejlevnejsi": null
+"novych": 34,
+"zlevneni": 1,
+"nejvetsi_sleva": {
+"castka": 1400,
+"titulek": "Houda Golf & Beach Club"
+},
+"nejlevnejsi": {
+"cena": 5970,
+"titulek": "Inna"
+}
 }
