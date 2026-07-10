@@ -25,7 +25,7 @@ LETISTE_FILTR = ["Praha", "Brno", "Ostrava"]
 # Diagnostika: když je True, u Exim Tours a Fischer se do logu vypíše
 # ukázka skutečně nalezených odkazů na stránce. Slouží k jednorázovému
 # doladění rozpoznávacího vzoru - po doladění vrať na False.
-DIAGNOSTIKA_ODKAZU = False
+DIAGNOSTIKA_ODKAZU = True
 
 # Filtr cílových destinací (whitelist). Vyplníš-li, projdou POUZE nabídky
 # obsahující některé z těchto slov. Prázdný seznam ([]) = vypnuto.
@@ -345,18 +345,24 @@ def diagnostika_vypis(soup, zdroj):
     """Vypíše do logu ukázku odkazů na stránce - pomůcka pro doladění vzoru."""
     if not DIAGNOSTIKA_ODKAZU:
         return
+    html_text = str(soup)
     hrefs = [a["href"] for a in soup.find_all("a", href=True)]
+    pocet_zajezd = html_text.lower().count("s_offer_id")
+    pocet_cookie = html_text.lower().count("souhlas") + html_text.lower().count("cookie")
+    print(f"  [DIAG {zdroj}] délka HTML: {len(html_text)} znaků, "
+          f"odkazů: {len(hrefs)}, výskytů 's_offer_id': {pocet_zajezd}, "
+          f"cookie/souhlas: {pocet_cookie}")
     zajimave = []
     videno = set()
     for h in hrefs:
         if h in videno:
             continue
         videno.add(h)
-        if any(k in h.lower() for k in ["zajezd", "hotel", "detail", "nabidka", "lm", "id="]):
+        if any(k in h.lower() for k in ["zajezd", "hotel", "detail", "nabidka", "s_offer_id"]):
             zajimave.append(h)
-    print(f"  [DIAG {zdroj}] celkem odkazů: {len(hrefs)}, kandidátů: {len(zajimave)}")
-    for h in zajimave[:25]:
-        print(f"  [DIAG {zdroj}] {h[:160]}")
+    print(f"  [DIAG {zdroj}] kandidátů na nabídku: {len(zajimave)}")
+    for h in zajimave[:15]:
+        print(f"  [DIAG {zdroj}] {h[:150]}")
 
 
 def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
@@ -383,6 +389,7 @@ def check_invia(seen, updates, stats, notify, browser):
             print(f"Invia chyba ({url}): {e}")
             continue
         soup = BeautifulSoup(html, "html.parser")
+        diagnostika_vypis(soup, "Invia")
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern):
             found += process_offer("invia", "Invia.cz", "https://www.invia.cz",
