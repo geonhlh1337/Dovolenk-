@@ -364,6 +364,20 @@ def diagnostika_vypis(soup, zdroj):
     for h in zajimave[:15]:
         print(f"  [DIAG {zdroj}] {h[:150]}")
 
+    # Navíc: u nabídek, které projdou vzorem, vypíšeme card_text a proč se
+    # (ne)pošlou - tím poznáme, jestli je zahazuje filtr nebo špatný text.
+    if zdroj == "Invia":
+        detail = re.compile(r"/zajezd/\?s_offer_id=", re.IGNORECASE)
+        vzorek = parse_offers_from_soup(soup, detail)
+        print(f"  [DIAG {zdroj}] nabídek přes vzor: {len(vzorek)}")
+        for href, title, card_text in vzorek[:3]:
+            print(f"  [DIAG {zdroj}] --- karta: {title}")
+            print(f"  [DIAG {zdroj}]     text: {card_text[:220]}")
+            print(f"  [DIAG {zdroj}]     letiště={passes_airport_filter(card_text)} "
+                  f"dest={passes_destination_filter(card_text)} "
+                  f"strava={passes_meal_filter(card_text)} "
+                  f"cena={extract_price(card_text)}")
+
 
 def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
     results = []
