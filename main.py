@@ -22,6 +22,11 @@ STATS_FILE = "stats.json"
 # obsahuje některé z těchto slov. Prázdný seznam ([]) = filtr vypnutý.
 LETISTE_FILTR = ["Praha", "Brno", "Ostrava"]
 
+# Diagnostika: když je True, u Exim Tours a Fischer se do logu vypíše
+# ukázka skutečně nalezených odkazů na stránce. Slouží k jednorázovému
+# doladění rozpoznávacího vzoru - po doladění vrať na False.
+DIAGNOSTIKA_ODKAZU = True
+
 # Filtr cílových destinací (whitelist). Vyplníš-li, projdou POUZE nabídky
 # obsahující některé z těchto slov. Prázdný seznam ([]) = vypnuto.
 # Příklady: "Egypt", "Řecko", "Turecko", "Kréta", "Rhodos", "Hurghada"...
@@ -323,6 +328,24 @@ def fetch_rendered_html(browser, url):
     return html
 
 
+def diagnostika_vypis(soup, zdroj):
+    """Vypíše do logu ukázku odkazů na stránce - pomůcka pro doladění vzoru."""
+    if not DIAGNOSTIKA_ODKAZU:
+        return
+    hrefs = [a["href"] for a in soup.find_all("a", href=True)]
+    zajimave = []
+    videno = set()
+    for h in hrefs:
+        if h in videno:
+            continue
+        videno.add(h)
+        if any(k in h.lower() for k in ["zajezd", "hotel", "detail", "nabidka", "lm", "id="]):
+            zajimave.append(h)
+    print(f"  [DIAG {zdroj}] celkem odkazů: {len(hrefs)}, kandidátů: {len(zajimave)}")
+    for h in zajimave[:25]:
+        print(f"  [DIAG {zdroj}] {h[:160]}")
+
+
 def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
     results = []
     for a in soup.find_all("a", href=True):
@@ -379,6 +402,7 @@ def check_eximtours(seen, updates, stats, notify, browser):
             print(f"Exim Tours chyba ({url}): {e}")
             continue
         soup = BeautifulSoup(html, "html.parser")
+        diagnostika_vypis(soup, "Exim Tours")
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern, min_text_len=15):
             found += process_offer("eximtours", "Exim Tours", "https://www.eximtours.cz",
@@ -395,6 +419,7 @@ def check_fischer(seen, updates, stats, notify, browser):
             print(f"Fischer chyba ({url}): {e}")
             continue
         soup = BeautifulSoup(html, "html.parser")
+        diagnostika_vypis(soup, "Fischer")
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern, min_text_len=15):
             found += process_offer("fischer", "Fischer", "https://www.fischer.cz",
