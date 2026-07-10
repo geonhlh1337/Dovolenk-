@@ -1,1 +1,42 @@
 
+name: Kontrola last minute zajezdu
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # kazdou celou hodinu
+  workflow_dispatch: {}    # umozni i rucni spusteni z GitHub webu
+
+permissions:
+  contents: write
+
+jobs:
+  kontrola:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stahnout repozitar
+        uses: actions/checkout@v4
+
+      - name: Nastavit Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Nainstalovat zavislosti
+        run: pip install -r requirements.txt
+
+      - name: Nainstalovat prohlizec pro Playwright
+        run: playwright install --with-deps chromium
+
+      - name: Spustit kontrolu nabidek
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: Ulozit aktualizovany stav zpet do repozitare
+        run: |
+          git config user.name "travel-bot"
+          git config user.email "travel-bot@users.noreply.github.com"
+          git add seen.json stats.json
+          git diff --staged --quiet || git commit -m "Aktualizace stavu bota"
+          git push
