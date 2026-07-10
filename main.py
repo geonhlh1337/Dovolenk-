@@ -25,7 +25,7 @@ LETISTE_FILTR = ["Praha", "Brno", "Ostrava"]
 # Diagnostika: když je True, u Exim Tours a Fischer se do logu vypíše
 # ukázka skutečně nalezených odkazů na stránce. Slouží k jednorázovému
 # doladění rozpoznávacího vzoru - po doladění vrať na False.
-DIAGNOSTIKA_ODKAZU = True
+DIAGNOSTIKA_ODKAZU = False
 
 # Filtr cílových destinací (whitelist). Vyplníš-li, projdou POUZE nabídky
 # obsahující některé z těchto slov. Prázdný seznam ([]) = vypnuto.
@@ -60,17 +60,19 @@ BLUESTYLE_SEARCH_URLS = [
     "https://www.blue-style.cz/last-minute/",
 ]
 
-# --- Exim Tours ---
-EXIMTOURS_SEARCH_URLS = [
-    "https://www.eximtours.cz/last-minute",
-]
+# --- Exim Tours a Fischer ---
+# POZNÁMKA: Tyto weby (obě CK patří pod DER Touristik) nevykreslují nabídky
+# jako běžné odkazy - dotahují je až dodatečně z interního API a zobrazují
+# jako interaktivní prvky. Přes prohlížeč se do HTML nedostanou (ověřeno
+# diagnostikou: na stránce jsou jen odkazy na kategorie, ne na konkrétní
+# zájezdy). Zprovoznění by vyžadovalo křehké reverzní rozklíčování jejich
+# API. Není to ale potřeba: nabídky OBOU těchto CK už obsahuje Invia.cz
+# (jsou to její partnerské kanceláře), takže o ně nepřicházíš.
+# Proto jsou zde vypnuté (prázdné seznamy). Kdybys je chtěl v budoucnu
+# zkusit oživit, stačí doplnit URL a upravit check funkce.
+EXIMTOURS_SEARCH_URLS = []
 
-# --- Fischer ---
-FISCHER_SEARCH_URLS = [
-    "https://www.fischer.cz/last-minute/odlety-z-prahy",
-    "https://www.fischer.cz/last-minute/odlety-z-brna",
-    "https://www.fischer.cz/last-minute",
-]
+FISCHER_SEARCH_URLS = []
 
 # ============================================================
 
@@ -79,10 +81,21 @@ FISCHER_SEARCH_URLS = [
 def load_seen():
     if not os.path.exists(SEEN_FILE):
         return {}
-    with open(SEEN_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(SEEN_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return {}
     if isinstance(data, list):  # nejstarší formát (seznam klíčů)
         return {k: {"ref": 0, "min": 0} for k in data}
+    if not isinstance(data, dict):
+        return {}
+    # Ochrana: kdyby se do seen.json omylem dostal obsah stats.json
+    # (klíče week/novych/zlevneni/...), bereme ho jako prázdný a začneme znovu.
+    STATS_KLICE = {"week", "novych", "zlevneni", "nejvetsi_sleva", "nejlevnejsi"}
+    if STATS_KLICE & set(data.keys()):
+        print("VAROVÁNÍ: seen.json obsahoval data statistik - resetuji na prázdný.")
+        return {}
     out = {}
     for k, v in data.items():
         if isinstance(v, dict):
