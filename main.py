@@ -27,13 +27,14 @@ LETISTE_FILTR = ["Praha", "Brno", "Ostrava"]
 # Příklady: "Egypt", "Řecko", "Turecko", "Kréta", "Rhodos", "Hurghada"...
 DESTINACE_FILTR = [
     # "Egypt",
+    # "Řecko",
 ]
 
 # Cenový strop v Kč za osobu. Nabídky s vyšší cenou se zahodí.
 # None = bez omezení. Nabídky, u kterých se cenu nepodařilo přečíst,
 # procházejí vždy (ať o ně nepřijdeš omylem).
 MAX_CENA = None
-# MAX_CENA = 50000
+# MAX_CENA = 15000
 
 # Filtr stravy. Vyplníš-li, projdou jen nabídky obsahující některé z těchto
 # slov. Prázdný seznam ([]) = vypnuto.
@@ -337,17 +338,15 @@ def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
     return results
 
 
-def check_invia(seen, updates, stats, notify):
+def check_invia(seen, updates, stats, notify, browser):
     detail_pattern = re.compile(r"/zajezd/\?s_offer_id=", re.IGNORECASE)
-    headers = {"User-Agent": "Mozilla/5.0"}
     for url in INVIA_SEARCH_URLS:
         try:
-            r = requests.get(url, headers=headers, timeout=20)
-            r.raise_for_status()
+            html = fetch_rendered_html(browser, url)
         except Exception as e:
             print(f"Invia chyba ({url}): {e}")
             continue
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(html, "html.parser")
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern):
             found += process_offer("invia", "Invia.cz", "https://www.invia.cz",
@@ -355,17 +354,15 @@ def check_invia(seen, updates, stats, notify):
         print(f"Invia ({url}): {found} nových/zlevněných nabídek.")
 
 
-def check_bluestyle(seen, updates, stats, notify):
+def check_bluestyle(seen, updates, stats, notify, browser):
     detail_pattern = re.compile(r"/zajezd", re.IGNORECASE)
-    headers = {"User-Agent": "Mozilla/5.0"}
     for url in BLUESTYLE_SEARCH_URLS:
         try:
-            r = requests.get(url, headers=headers, timeout=20)
-            r.raise_for_status()
+            html = fetch_rendered_html(browser, url)
         except Exception as e:
             print(f"Blue Style chyba ({url}): {e}")
             continue
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(html, "html.parser")
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern):
             found += process_offer("bluestyle", "Blue Style", "https://www.blue-style.cz",
@@ -424,12 +421,11 @@ def main():
     if first_run:
         print("První spuštění – ukládám aktuální nabídky, ale zprávy zatím neposílám.")
 
-    check_invia(seen, updates, stats, notify=not first_run)
-    check_bluestyle(seen, updates, stats, notify=not first_run)
-
     with sync_playwright() as p:
         browser = p.chromium.launch()
         try:
+            check_invia(seen, updates, stats, notify=not first_run, browser=browser)
+            check_bluestyle(seen, updates, stats, notify=not first_run, browser=browser)
             check_eximtours(seen, updates, stats, notify=not first_run, browser=browser)
             check_fischer(seen, updates, stats, notify=not first_run, browser=browser)
         finally:
