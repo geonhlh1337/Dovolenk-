@@ -27,14 +27,13 @@ LETISTE_FILTR = ["Praha", "Brno", "Ostrava"]
 # Příklady: "Egypt", "Řecko", "Turecko", "Kréta", "Rhodos", "Hurghada"...
 DESTINACE_FILTR = [
     # "Egypt",
-    # "Řecko",
 ]
 
 # Cenový strop v Kč za osobu. Nabídky s vyšší cenou se zahodí.
 # None = bez omezení. Nabídky, u kterých se cenu nepodařilo přečíst,
 # procházejí vždy (ať o ně nepřijdeš omylem).
 MAX_CENA = None
-# MAX_CENA = 15000
+# MAX_CENA = 50000
 
 # Filtr stravy. Vyplníš-li, projdou jen nabídky obsahující některé z těchto
 # slov. Prázdný seznam ([]) = vypnuto.
