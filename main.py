@@ -30,9 +30,31 @@ DIAGNOSTIKA_ODKAZU = False
 # Filtr cílových destinací (whitelist). Vyplníš-li, projdou POUZE nabídky
 # obsahující některé z těchto slov. Prázdný seznam ([]) = vypnuto.
 # Příklady: "Egypt", "Řecko", "Turecko", "Kréta", "Rhodos", "Hurghada"...
+# ------------------------------------------------------------
+# FILTR CÍLOVÝCH DESTINACÍ (whitelist)
+# ------------------------------------------------------------
+# Projdou POUZE nabídky, jejichž text obsahuje některé z těchto slov
+# (nezáleží na velikosti písmen, stačí část slova - "Egypt" chytí i "Egypta").
+# Prázdný seznam ([]) = filtr vypnutý, chodí všechny destinace.
+#
+# Jak si přidat další zemi: prostě dopiš řádek, např.
+#     "Řecko", "Kréta", "Rhodos",
+#     "Turecko", "Antalya", "Side",
+# Zemi stačí uvést jednou - konkrétní letoviska přidávej jen tehdy, když
+# chceš mít jistotu i u zdrojů, které v textu neuvádějí název země.
 DESTINACE_FILTR = [
-    # "Egypt",
-    # "Řecko",
+    # Egypt a všechna jeho letoviska:
+    "Egypt",
+    "Hurghada",
+    "Marsa Alam",
+    "Sharm",           # Sharm El Sheikh
+    "Safaga",
+    "Marsa Matrouh",
+    "Taba",
+    "El Gouna",
+    "Sahl Hasheesh",
+    "Nuweiba",
+    "Dahab",
 ]
 
 # Cenový strop v Kč za osobu. Nabídky s vyšší cenou se zahodí.
@@ -49,10 +71,19 @@ STRAVA_FILTR = [
 ]
 
 # --- Invia.cz --- (srovnávač 120+ CK: Exim, Fischer, Blue Style, Čedok...)
+# Invia na svých last-minute stránkách agreguje nabídky od VŠECH partnerských
+# CK dohromady (Exim Tours, Fischer, Blue Style, Čedok a dalších 120+), takže
+# přes tyto stránky chodí i jejich zájezdy - není potřeba je řešit zvlášť.
+# Kromě obecných stránek (Praha/Brno/Ostrava) je zde i cílená stránka na
+# Egypt kvůli filtru DESTINACE_FILTR.
+# Pozn.: Samostatné stránky /cestovni-kancelare/ck-.../ jsou jen rozcestníky
+# bez konkrétních nabídek, proto je nepoužíváme (vracely by 0).
 INVIA_SEARCH_URLS = [
     "https://www.invia.cz/dovolena/last-minute/",
     "https://www.invia.cz/dovolena/last-minute-z-brna/",
     "https://www.invia.cz/dovolena/last-minute-ostrava/",
+    "https://www.invia.cz/dovolena/last-minute/egypt/",
+    "https://www.invia.cz/dovolena/last-minute/egypt/marsa-alam/",
 ]
 
 # --- Blue Style ---
@@ -100,6 +131,8 @@ def load_seen():
     for k, v in data.items():
         if isinstance(v, dict):
             out[k] = {"ref": v.get("ref", 0), "min": v.get("min", 0)}
+            if "d" in v:
+                out[k]["d"] = v["d"]
         else:  # starší formát (klic -> cena)
             out[k] = {"ref": v, "min": v}
     return out
@@ -182,6 +215,14 @@ def format_price(value):
     return f"{value:,}".replace(",", " ") + " Kč"
 
 
+def clean_card_text(text):
+    """Pročistí text karty pro hezčí zprávu - odstraní balast a zdvojené mezery."""
+    for junk in ["Informace", "Přidat do oblíbených", "Zobrazit detail zájezdu",
+                 "Další Předchozí", "Více"]:
+        text = text.replace(junk, " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def passes_airport_filter(text):
     if not LETISTE_FILTR:
         return True
@@ -241,6 +282,31 @@ def send_weekly_summary(stats):
     send_telegram("\n".join(lines))
 
 
+def prune_seen(seen, updates, today_str, max_age_days=60):
+    """
+    Úklid paměti: nabídkám viděným v tomto běhu nastaví dnešní datum,
+    záznamy neviděné déle než max_age_days smaže (last minute nabídky
+    dávno zmizely, není důvod je držet - seen.json by jinak rostl navěky).
+    """
+    for v in updates.values():
+        v["d"] = today_str
+    cutoff = datetime.date.fromisoformat(today_str) - datetime.timedelta(days=max_age_days)
+    out = {}
+    for k, v in seen.items():
+        d = v.get("d")
+        if d is None:
+            v["d"] = today_str  # starší záznamy bez data dostanou dnešek
+            out[k] = v
+            continue
+        try:
+            if datetime.date.fromisoformat(d) >= cutoff:
+                out[k] = v
+        except ValueError:
+            v["d"] = today_str
+            out[k] = v
+    return out
+
+
 def process_offer(source, source_label, base_url, seen, updates, stats, notify,
                   href, title, card_text):
     if not passes_airport_filter(card_text):
@@ -265,7 +331,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         if notify:
             price_line = f"\n💰 {format_price(price)}" if price else ""
             send_telegram(
-                f"✈️ <b>{source_label}</b> · 🆕 NOVÉ{price_line}\n{title}\n{card_text}",
+                f"✈️ <b>{source_label}</b> · 🆕 NOVÉ{price_line}\n{title}\n{clean_card_text(card_text)}",
                 link=link,
             )
         return 1
@@ -286,7 +352,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
                 f"✈️ <b>{source_label}</b> · 🔻 ZLEVNĚNÍ o {format_price(sleva)}{badge}\n"
                 f"{title}\n"
                 f"Původně {format_price(old_ref)} → nyní <b>{format_price(price)}</b>\n"
-                f"{card_text}",
+                f"{clean_card_text(card_text)}",
                 link=link,
             )
         return 1
@@ -501,14 +567,24 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         try:
-            check_invia(seen, updates, stats, notify=not first_run, browser=browser)
-            check_bluestyle(seen, updates, stats, notify=not first_run, browser=browser)
-            check_eximtours(seen, updates, stats, notify=not first_run, browser=browser)
-            check_fischer(seen, updates, stats, notify=not first_run, browser=browser)
+            # Každý zdroj běží samostatně - pád jednoho nezastaví ostatní.
+            zdroje = [
+                ("Invia", check_invia),
+                ("Blue Style", check_bluestyle),
+                ("Exim Tours", check_eximtours),
+                ("Fischer", check_fischer),
+            ]
+            for nazev, fn in zdroje:
+                try:
+                    fn(seen, updates, stats, notify=not first_run, browser=browser)
+                except Exception as e:
+                    print(f"CHYBA zdroje {nazev} (pokračuji dalšími): {e}")
         finally:
             browser.close()
 
+    today_str = now.date().isoformat()
     seen.update(updates)
+    seen = prune_seen(seen, updates, today_str)
     save_seen(seen)
     save_stats(stats)
     if updates:
