@@ -25,7 +25,7 @@ LETISTE_FILTR = ["Praha", "Brno", "Ostrava"]
 # Diagnostika: když je True, u Exim Tours a Fischer se do logu vypíše
 # ukázka skutečně nalezených odkazů na stránce. Slouží k jednorázovému
 # doladění rozpoznávacího vzoru - po doladění vrať na False.
-DIAGNOSTIKA_ODKAZU = True
+DIAGNOSTIKA_ODKAZU = False
 
 # Filtr cílových destinací (whitelist). Vyplníš-li, projdou POUZE nabídky
 # obsahující některé z těchto slov. Prázdný seznam ([]) = vypnuto.
@@ -271,12 +271,14 @@ def short_hash(text):
 
 
 def extract_price(text):
-    m = re.search(r"od\s*([\d\s]{3,})\s*Kč", text)
-    if not m:
-        m = re.search(r"([\d\s]{4,})\s*Kč", text)
+    # Bereme jen jasnou cenu ve tvaru "od X Kč" (spolehlivý údaj u zájezdů).
+    # Fallback na jakékoliv číslo + Kč je záměrně vynechán, protože u
+    # hotelových přehledových karet slepoval nesouvisející čísla (např. 40000).
+    m = re.search(r"\bod\s*([\d\s]{3,9})\s*Kč", text)
     if m:
         digits = re.sub(r"\s+", "", m.group(1))
-        if digits.isdigit():
+        # Rozumné rozpětí ceny zájezdu na osobu (3 000 - 500 000 Kč).
+        if digits.isdigit() and 3000 <= int(digits) <= 500000:
             return int(digits)
     return None
 
@@ -296,7 +298,17 @@ def clean_card_text(text):
 def passes_airport_filter(text):
     if not LETISTE_FILTR:
         return True
-    return any(l.lower() in text.lower() for l in LETISTE_FILTR)
+    # Když text obsahuje NĚJAKÉ z našich letišť, musí sedět.
+    if any(l.lower() in text.lower() for l in LETISTE_FILTR):
+        return True
+    # Když karta neuvádí žádné odletové letiště vůbec (typicky přehledové
+    # hotelové karty bez termínu), nezahazujeme ji - odletiště stejně řeší
+    # filtr přímo v URL (nl_transportation / vyhledávání z ČR).
+    znama_letiste = ["praha", "brno", "ostrava", "katovice", "pardubice",
+                     "katowice", "wien", "vídeň", "bratislava", "letiště", "odlet"]
+    if not any(z in text.lower() for z in znama_letiste):
+        return True
+    return False
 
 
 def passes_destination_filter(text):
@@ -331,11 +343,16 @@ def passes_price_cap(price):
 
 
 def extract_nights(text):
-    """Přečte počet nocí z textu ('X nocí' i 'X dní', kde Y dní = Y-1 nocí)."""
-    m = re.search(r"(\d{1,2})\s*noc", text, re.IGNORECASE)
+    """
+    Přečte počet nocí z textu. Bere jen jasné údaje o délce pobytu:
+    'X nocí' nebo 'X dní/dnů'. Aby se nepletlo s čísly u vybavení
+    ('2 bazény', '3 restaurace'), vyžaduje slovo noc/den těsně za číslem.
+    Vrací int nebo None (None = nejde přečíst -> filtr pak nabídku propustí).
+    """
+    m = re.search(r"\b(\d{1,2})\s*noc[íieí]*\b", text, re.IGNORECASE)
     if m:
         return int(m.group(1))
-    m = re.search(r"(\d{1,2})\s*(dn[íi]|dn[ůu])", text, re.IGNORECASE)
+    m = re.search(r"\b(\d{1,2})\s*(dn[íi]|dn[ůu]|dní)\b", text, re.IGNORECASE)
     if m:
         dni = int(m.group(1))
         return dni - 1 if dni > 1 else dni
@@ -419,12 +436,17 @@ def prune_seen(seen, updates, today_str, max_age_days=60):
 def process_offer(source, source_label, base_url, seen, updates, stats, notify,
                   href, title, card_text, trusted=False):
     # Filtr hotelového řetězce (Jaz) platí VŽDY - i na důvěryhodných URL.
-    if not passes_hotel_filter(card_text):
+    # Kontrolujeme text karty, NÁZEV (title) i URL odkazu, protože název
+    # hotelu (např. "jaz-elite-riviera") bývá jen v odkazu, ne v textu karty.
+    hotel_haystack = f"{card_text} {title} {href.replace('-', ' ')}"
+    if not passes_hotel_filter(hotel_haystack):
         return 0
     if not passes_airport_filter(card_text):
         return 0
     # U důvěryhodných URL (už vyfiltrované na zemi) filtr destinací přeskočíme.
-    if not trusted and not passes_destination_filter(card_text):
+    # Destinaci hledáme i v URL (název letoviska bývá v cestě odkazu).
+    dest_haystack = f"{card_text} {href.replace('-', ' ')}"
+    if not trusted and not passes_destination_filter(dest_haystack):
         return 0
     if not passes_meal_filter(card_text):
         return 0
