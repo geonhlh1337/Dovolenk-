@@ -25,7 +25,7 @@ LETISTE_FILTR = ["Praha", "Brno", "Ostrava"]
 # Diagnostika: když je True, u Exim Tours a Fischer se do logu vypíše
 # ukázka skutečně nalezených odkazů na stránce. Slouží k jednorázovému
 # doladění rozpoznávacího vzoru - po doladění vrať na False.
-DIAGNOSTIKA_ODKAZU = False
+DIAGNOSTIKA_ODKAZU = True
 
 # Filtr cílových destinací (whitelist). Vyplníš-li, projdou POUZE nabídky
 # obsahující některé z těchto slov. Prázdný seznam ([]) = vypnuto.
@@ -564,13 +564,19 @@ def diagnostika_vypis(soup, zdroj):
     if zdroj == "Invia":
         detail = re.compile(r"/zajezd/\?s_offer_id=", re.IGNORECASE)
         vzorek = parse_offers_from_soup(soup, detail)
-        print(f"  [DIAG {zdroj}] nabídek přes vzor: {len(vzorek)}")
-        for href, title, card_text in vzorek[:3]:
+        # Kolik z nabídek obsahuje "Jaz"?
+        jaz_pocet = sum(1 for _, _, ct in vzorek if passes_hotel_filter(ct))
+        print(f"  [DIAG {zdroj}] nabídek přes vzor: {len(vzorek)}, z toho JAZ: {jaz_pocet}")
+        # Ukážeme prvních pár Jaz nabídek (nebo když žádná, tak první 3 vůbec)
+        jaz_offers = [(h, t, ct) for h, t, ct in vzorek if passes_hotel_filter(ct)]
+        ukazat = jaz_offers[:3] if jaz_offers else vzorek[:3]
+        for href, title, card_text in ukazat:
             print(f"  [DIAG {zdroj}] --- karta: {title}")
-            print(f"  [DIAG {zdroj}]     text: {card_text[:220]}")
-            print(f"  [DIAG {zdroj}]     letiště={passes_airport_filter(card_text)} "
+            print(f"  [DIAG {zdroj}]     text: {card_text[:200]}")
+            print(f"  [DIAG {zdroj}]     hotel(Jaz)={passes_hotel_filter(card_text)} "
+                  f"letiště={passes_airport_filter(card_text)} "
                   f"dest={passes_destination_filter(card_text)} "
-                  f"strava={passes_meal_filter(card_text)} "
+                  f"noci={passes_min_nights(card_text)} "
                   f"cena={extract_price(card_text)}")
 
 
