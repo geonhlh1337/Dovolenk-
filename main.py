@@ -51,6 +51,7 @@ DESTINACE_FILTR = [
     "Sharm",            # Sharm El Sheikh / Šarm
     "Marsa Matrouh",
     "Marsa Matruh",
+    "Almaza",           # Almaza Bay - zde je Jaz Almaza Bay
     "Safaga",
     "Taba",
     "Dahab",
@@ -64,7 +65,24 @@ DESTINACE_FILTR = [
     "Ain Sokhna",
     "Ain Soukhna",
     "El Quseir",
+    "Alexandria",
     "Káhira",
+    "Luxor",            # Jaz má hotel i v Luxoru
+]
+
+# ------------------------------------------------------------
+# FILTR HOTELOVÉHO ŘETĚZCE
+# ------------------------------------------------------------
+# Projdou POUZE nabídky, jejichž název/text obsahuje některé z těchto slov
+# jako SAMOSTATNÉ SLOVO (aby "Jaz" nechytlo "jazyk", "jazz" apod.).
+# Prázdný seznam ([]) = filtr vypnutý.
+# Tento filtr platí VŽDY - i na vyhledávacích URL z DUVERYHODNE_EGYPT_URL,
+# protože chceš striktně jen tyto hotely.
+#
+# Aktuálně: jen řetězec Jaz (Jaz Aquamarine, Jaz Mirabel, Jaz Grand Marsa...).
+# Chceš přidat další řetězec? Dopiš např. "Steigenberger", "Rixos", "Pickalbatros".
+HOTEL_FILTR = [
+    "Jaz",
 ]
 
 # Cenový strop v Kč za osobu. Nabídky s vyšší cenou se zahodí.
@@ -90,8 +108,8 @@ OZNAMOVAT_ZDRAZENI = True
 # POZOR: důvěřuje se URL, ne textu - proto sem dávej JEN adresy opravdu
 # omezené na Egypt, jinak by prošly i jiné země.
 DUVERYHODNE_EGYPT_URL = [
-    "https://www.invia.cz/dovolena/last-minute/egypt",
-    "https://www.invia.cz/dovolena/?s_action=default",
+    # Invia vyhledávací URL sem ZÁMĚRNĚ nedávám - ověřeno, že vrací i jiné
+    # země, takže na ně necháváme platit filtr Egyptu (spolehlivější).
     "https://www.eximtours.cz/vysledky-vyhledavani",
     "https://www.eximtours.cz/last-minute/egypt",
     "https://www.fischer.cz/vysledky-vyhledavani",
@@ -115,11 +133,19 @@ STRAVA_FILTR = [
 # Pozn.: Samostatné stránky /cestovni-kancelare/ck-.../ jsou jen rozcestníky
 # bez konkrétních nabídek, proto je nepoužíváme (vracely by 0).
 INVIA_SEARCH_URLS = [
+    # Obecné last-minute stránky (filtr Egypt+Jaz je pročistí):
     "https://www.invia.cz/dovolena/last-minute/",
     "https://www.invia.cz/dovolena/last-minute-z-brna/",
     "https://www.invia.cz/dovolena/last-minute-ostrava/",
+    # Cílené egyptské last-minute stránky:
     "https://www.invia.cz/dovolena/last-minute/egypt/",
     "https://www.invia.cz/dovolena/last-minute/egypt/marsa-alam/",
+    # CELÝ EGYPT - vyhledávání přes nl_country_id=11 (pokrývá VŠECHNA egyptská
+    # letoviska najednou, kde Jaz má hotel), 7+ nocí, 2 dospělí, letecky z ČR,
+    # řazeno od nejlevnějšího. Tohle je hlavní zdroj pro kompletní přehled Jaz
+    # v Egyptě. Filtr Egypt+Jaz z toho vybere jen Jaz hotely.
+    "https://www.invia.cz/dovolena/?nl_country_id=11&nl_length_from=7&nl_occupancy_adults=2&nl_transportation_id%5B%5D=3_CZ&sort=c_price&sort_order=asc&search_form=1",
+    # Tvoje původní vyhledávací URL (ponechána; filtr Egypt+Jaz ji pročistí):
     "https://www.invia.cz/dovolena/?s_action=default&d_start_from=12.07.2026&nl_transportation_id%5B%5D=3_1&nl_transportation_id%5B%5D=3_2&nl_transportation_id%5B%5D=3_3&page=1&nl_occupancy_adults=2&nl_locality_parent_id%5B%5D=626&nl_length_from=7&sort=nl_sell&nl_locality_id%5B%5D=626",
 ]
 
@@ -279,6 +305,19 @@ def passes_destination_filter(text):
     return any(d.lower() in text.lower() for d in DESTINACE_FILTR)
 
 
+def passes_hotel_filter(text):
+    """
+    True, pokud text obsahuje některý z HOTEL_FILTR jako samostatné slovo.
+    Word-boundary hledání zabrání tomu, aby krátké "Jaz" chytlo "jazyk"/"jazz".
+    """
+    if not HOTEL_FILTR:
+        return True
+    for h in HOTEL_FILTR:
+        if re.search(r"\b" + re.escape(h) + r"\b", text, re.IGNORECASE):
+            return True
+    return False
+
+
 def passes_meal_filter(text):
     if not STRAVA_FILTR:
         return True
@@ -379,6 +418,9 @@ def prune_seen(seen, updates, today_str, max_age_days=60):
 
 def process_offer(source, source_label, base_url, seen, updates, stats, notify,
                   href, title, card_text, trusted=False):
+    # Filtr hotelového řetězce (Jaz) platí VŽDY - i na důvěryhodných URL.
+    if not passes_hotel_filter(card_text):
+        return 0
     if not passes_airport_filter(card_text):
         return 0
     # U důvěryhodných URL (už vyfiltrované na zemi) filtr destinací přeskočíme.
