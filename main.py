@@ -43,18 +43,28 @@ DIAGNOSTIKA_ODKAZU = False
 # Zemi stačí uvést jednou - konkrétní letoviska přidávej jen tehdy, když
 # chceš mít jistotu i u zdrojů, které v textu neuvádějí název země.
 DESTINACE_FILTR = [
-    # Egypt a všechna jeho letoviska:
+    # Egypt jako pojistka (chytí karty, které uvádějí jen zemi):
     "Egypt",
+    # Egyptská letoviska (hlavní filtr - karty často uvádějí rovnou letovisko):
     "Hurghada",
     "Marsa Alam",
-    "Sharm",           # Sharm El Sheikh
-    "Safaga",
+    "Sharm",            # Sharm El Sheikh / Šarm
     "Marsa Matrouh",
+    "Marsa Matruh",
+    "Safaga",
     "Taba",
+    "Dahab",
     "El Gouna",
+    "Makadi",           # Makadi Bay
+    "Soma Bay",
     "Sahl Hasheesh",
     "Nuweiba",
-    "Dahab",
+    "Nuwejba",
+    "Naama Bay",
+    "Ain Sokhna",
+    "Ain Soukhna",
+    "El Quseir",
+    "Káhira",
 ]
 
 # Cenový strop v Kč za osobu. Nabídky s vyšší cenou se zahodí.
@@ -62,6 +72,32 @@ DESTINACE_FILTR = [
 # procházejí vždy (ať o ně nepřijdeš omylem).
 MAX_CENA = None
 # MAX_CENA = 25000
+
+# Minimální počet nocí. Nabídky kratší se zahodí. None = bez omezení.
+# Pojistka z textu karty - hlavní filtrování dělá URL parametr (nl_length_from
+# apod.), tohle je záloha, kdyby URL nějakou kratší pustila. Nabídky, u
+# kterých počet nocí nejde z textu přečíst, procházejí (ať o ně nepřijdeš).
+MIN_NOCI = 7
+
+# Oznamovat i ZDRAŽENÍ? True = přijde 🔺 zpráva, když nabídka zdraží.
+# False = chodí jen zlevnění 🔻 (a nové nabídky).
+OZNAMOVAT_ZDRAZENI = True
+
+# URL, které už samy vrací jen požadovanou zemi (vyfiltrované parametry přímo
+# na webu - tvoje vyhledávací URL). Na nabídky z těchto URL se filtr
+# DESTINACE_FILTR NEAPLIKUJE - bereš vše, co vrátí. Porovnává se podle
+# začátku adresy. Sem patří tvoje vyladěné vyhledávací URL na Egypt.
+# POZOR: důvěřuje se URL, ne textu - proto sem dávej JEN adresy opravdu
+# omezené na Egypt, jinak by prošly i jiné země.
+DUVERYHODNE_EGYPT_URL = [
+    "https://www.invia.cz/dovolena/last-minute/egypt",
+    "https://www.invia.cz/dovolena/?s_action=default",
+    "https://www.eximtours.cz/vysledky-vyhledavani",
+    "https://www.eximtours.cz/last-minute/egypt",
+    "https://www.fischer.cz/vysledky-vyhledavani",
+    "https://www.fischer.cz/last-minute/egypt",
+    "https://www.blue-style.cz/vyhledavani/",
+]
 
 # Filtr stravy. Vyplníš-li, projdou jen nabídky obsahující některé z těchto
 # slov. Prázdný seznam ([]) = vypnuto.
@@ -255,6 +291,32 @@ def passes_price_cap(price):
     return price <= MAX_CENA
 
 
+def extract_nights(text):
+    """Přečte počet nocí z textu ('X nocí' i 'X dní', kde Y dní = Y-1 nocí)."""
+    m = re.search(r"(\d{1,2})\s*noc", text, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"(\d{1,2})\s*(dn[íi]|dn[ůu])", text, re.IGNORECASE)
+    if m:
+        dni = int(m.group(1))
+        return dni - 1 if dni > 1 else dni
+    return None
+
+
+def passes_min_nights(text):
+    if MIN_NOCI is None:
+        return True
+    nights = extract_nights(text)
+    if nights is None:
+        return True  # nejde přečíst -> nezahazujeme
+    return nights >= MIN_NOCI
+
+
+def is_trusted_url(url):
+    """True, pokud URL už sama vrací jen požadovanou zemi (filtr se přeskočí)."""
+    return any(url.startswith(prefix) for prefix in DUVERYHODNE_EGYPT_URL)
+
+
 def make_offer_key(source, base_path, card_text):
     date_match = re.search(r"\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}", card_text)
     date_part = date_match.group(0) if date_match else ""
@@ -316,12 +378,15 @@ def prune_seen(seen, updates, today_str, max_age_days=60):
 
 
 def process_offer(source, source_label, base_url, seen, updates, stats, notify,
-                  href, title, card_text):
+                  href, title, card_text, trusted=False):
     if not passes_airport_filter(card_text):
         return 0
-    if not passes_destination_filter(card_text):
+    # U důvěryhodných URL (už vyfiltrované na zemi) filtr destinací přeskočíme.
+    if not trusted and not passes_destination_filter(card_text):
         return 0
     if not passes_meal_filter(card_text):
+        return 0
+    if not passes_min_nights(card_text):
         return 0
 
     price = extract_price(card_text)
@@ -348,6 +413,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
     old_ref = entry.get("ref", 0)
     old_min = entry.get("min", 0)
 
+    # ZLEVNĚNÍ 🔻
     if price and old_ref and price < old_ref:
         sleva = old_ref - price
         is_record = bool(old_min) and price < old_min
@@ -357,7 +423,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         if notify:
             badge = "\n🏆 <b>Nejnižší cena, jakou jsem u této nabídky kdy viděl!</b>" if is_record else ""
             send_telegram(
-                f"✈️ <b>{source_label}</b> · 🔻 ZLEVNĚNÍ o {format_price(sleva)}{badge}\n"
+                f"🔻🟥 <b>{source_label}</b> · <b>ZLEVNĚNÍ</b> o {format_price(sleva)}{badge}\n"
                 f"{title}\n"
                 f"Původně {format_price(old_ref)} → nyní <b>{format_price(price)}</b>\n"
                 f"{clean_card_text(card_text)}",
@@ -365,11 +431,24 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
             )
         return 1
 
-    # Beze změny nebo zdražení: aktualizujeme referenci nahoru, minimum držíme.
+    # ZDRAŽENÍ 🔺
+    if OZNAMOVAT_ZDRAZENI and price and old_ref and price > old_ref:
+        zdrazeni = price - old_ref
+        updates[key] = {"ref": price, "min": old_min if old_min else price}
+        if notify:
+            send_telegram(
+                f"🔺🟩 <b>{source_label}</b> · <b>ZDRAŽENÍ</b> o {format_price(zdrazeni)}\n"
+                f"{title}\n"
+                f"Původně {format_price(old_ref)} → nyní <b>{format_price(price)}</b>\n"
+                f"{clean_card_text(card_text)}",
+                link=link,
+            )
+        return 1
+
+    # Beze změny: minimum držíme.
     if price:
-        new_ref = max(price, old_ref) if old_ref else price
         new_min = min(price, old_min) if old_min else price
-        updates[key] = {"ref": new_ref, "min": new_min}
+        updates[key] = {"ref": price, "min": new_min}
     return 0
 
 
@@ -499,7 +578,8 @@ def check_invia(seen, updates, stats, notify, browser):
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern):
             found += process_offer("invia", "Invia.cz", "https://www.invia.cz",
-                                   seen, updates, stats, notify, href, title, card_text)
+                                   seen, updates, stats, notify, href, title, card_text,
+                                   trusted=is_trusted_url(url))
         print(f"Invia ({url}): {found} nových/zlevněných nabídek.")
 
 
@@ -515,7 +595,8 @@ def check_bluestyle(seen, updates, stats, notify, browser):
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern):
             found += process_offer("bluestyle", "Blue Style", "https://www.blue-style.cz",
-                                   seen, updates, stats, notify, href, title, card_text)
+                                   seen, updates, stats, notify, href, title, card_text,
+                                   trusted=is_trusted_url(url))
         print(f"Blue Style ({url}): {found} nových/zlevněných nabídek.")
 
 
@@ -532,7 +613,8 @@ def check_eximtours(seen, updates, stats, notify, browser):
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern, min_text_len=15):
             found += process_offer("eximtours", "Exim Tours", "https://www.eximtours.cz",
-                                   seen, updates, stats, notify, href, title, card_text)
+                                   seen, updates, stats, notify, href, title, card_text,
+                                   trusted=is_trusted_url(url))
         print(f"Exim Tours ({url}): {found} nových/zlevněných nabídek.")
 
 
@@ -549,7 +631,8 @@ def check_fischer(seen, updates, stats, notify, browser):
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern, min_text_len=15):
             found += process_offer("fischer", "Fischer", "https://www.fischer.cz",
-                                   seen, updates, stats, notify, href, title, card_text)
+                                   seen, updates, stats, notify, href, title, card_text,
+                                   trusted=is_trusted_url(url))
         print(f"Fischer ({url}): {found} nových/zlevněných nabídek.")
 
 
