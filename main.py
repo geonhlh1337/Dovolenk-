@@ -103,9 +103,15 @@ BLUESTYLE_SEARCH_URLS = [
 # (jsou to její partnerské kanceláře), takže o ně nepřicházíš.
 # Proto jsou zde vypnuté (prázdné seznamy). Kdybys je chtěl v budoucnu
 # zkusit oživit, stačí doplnit URL a upravit check funkce.
-EXIMTOURS_SEARCH_URLS = []
+EXIMTOURS_SEARCH_URLS = [
+    "https://www.eximtours.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&m=5&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682|4308|4392|4309&tt=1",
+    "https://www.eximtours.cz/last-minute/egypt",
+]
 
-FISCHER_SEARCH_URLS = []
+FISCHER_SEARCH_URLS = [
+    "https://www.fischer.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682&tt=1",
+    "https://www.fischer.cz/last-minute/egypt",
+]
 
 # ============================================================
 
