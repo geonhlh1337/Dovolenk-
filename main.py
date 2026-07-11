@@ -61,7 +61,7 @@ DESTINACE_FILTR = [
 # None = bez omezení. Nabídky, u kterých se cenu nepodařilo přečíst,
 # procházejí vždy (ať o ně nepřijdeš omylem).
 MAX_CENA = None
-# MAX_CENA = 15000
+# MAX_CENA = 25000
 
 # Filtr stravy. Vyplníš-li, projdou jen nabídky obsahující některé z těchto
 # slov. Prázdný seznam ([]) = vypnuto.
@@ -84,11 +84,13 @@ INVIA_SEARCH_URLS = [
     "https://www.invia.cz/dovolena/last-minute-ostrava/",
     "https://www.invia.cz/dovolena/last-minute/egypt/",
     "https://www.invia.cz/dovolena/last-minute/egypt/marsa-alam/",
+    "https://www.invia.cz/dovolena/?s_action=default&d_start_from=12.07.2026&nl_transportation_id%5B%5D=3_1&nl_transportation_id%5B%5D=3_2&nl_transportation_id%5B%5D=3_3&page=1&nl_occupancy_adults=2&nl_locality_parent_id%5B%5D=626&nl_length_from=7&sort=nl_sell&nl_locality_id%5B%5D=626",
 ]
 
 # --- Blue Style ---
 BLUESTYLE_SEARCH_URLS = [
     "https://www.blue-style.cz/last-minute/",
+    "https://www.blue-style.cz/vyhledavani/?depCity=2%2C10%2C11&arrCity=8&dateFrom=2026-07-12&dateTo=2026-08-11&room1=2&priceType=per-person",
 ]
 
 # --- Exim Tours a Fischer ---
