@@ -332,6 +332,43 @@ def format_price(value):
     return f"{value:,}".replace(",", " ") + " Kč"
 
 
+def zprava_detail(title, card_text, source_label):
+    """
+    Sestaví přehledné tělo zprávy: hotel, termín, noci, strava, odlet, popis.
+    """
+    radky = []
+    # Název hotelu - z title, doplněný z textu karty, kdyby byl title prázdný
+    hotel = (title or "").strip()
+    if not hotel or hotel.lower() in ("nabídka last minute", "hotel"):
+        hotel = clean_card_text(card_text)[:60]
+    radky.append(f"🏨 <b>{hotel}</b>")
+
+    # Termín + počet nocí
+    term = extract_term(card_text)
+    noci = extract_nights(card_text)
+    if term:
+        radky.append(f"📅 {format_term(term)}")
+    if noci is not None:
+        radky.append(f"🌙 <b>{noci} nocí</b>")
+    else:
+        radky.append("🌙 ⚠️ <i>délka pobytu neuvedena – zkontroluj v odkazu</i>")
+
+    # Strava (když ji karta uvádí)
+    for strava in ["All inclusive", "Ultra all inclusive", "Plná penze",
+                   "Polopenze", "Snídaně", "Bez stravy"]:
+        if strava.lower() in card_text.lower():
+            radky.append(f"🍽 {strava}")
+            break
+
+    # Odletové letiště (když ho karta uvádí)
+    for letiste in ["Praha", "Brno", "Ostrava"]:
+        if letiste.lower() in card_text.lower():
+            radky.append(f"✈️ Odlet: {letiste}")
+            break
+
+    return "\n".join(radky)
+
+
 def clean_card_text(text):
     """Pročistí text karty pro hezčí zprávu - odstraní balast a zdvojené mezery."""
     for junk in ["Informace", "Přidat do oblíbených", "Zobrazit detail zájezdu",
@@ -387,18 +424,65 @@ def passes_price_cap(price):
     return price <= MAX_CENA
 
 
+def _vsechna_data(text):
+    """Najde v textu všechna data a vrátí je jako seřazený seznam datetime.date."""
+    nalezena = []
+    # dd.mm.yyyy / dd.m.yyyy / dd. mm. yyyy
+    for m in re.finditer(r"\b(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\b", text):
+        try:
+            nalezena.append(datetime.date(int(m.group(3)), int(m.group(2)), int(m.group(1))))
+        except ValueError:
+            pass
+    # yyyy-mm-dd
+    for m in re.finditer(r"\b(\d{4})-(\d{2})-(\d{2})\b", text):
+        try:
+            nalezena.append(datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3))))
+        except ValueError:
+            pass
+    # dd.mm. bez roku (doplníme rok podle jiného nalezeného data nebo dneška)
+    if len(nalezena) < 2:
+        rok = nalezena[0].year if nalezena else datetime.date.today().year
+        for m in re.finditer(r"\b(\d{1,2})\.\s*(\d{1,2})\.(?!\s*\d{4})", text):
+            try:
+                nalezena.append(datetime.date(rok, int(m.group(2)), int(m.group(1))))
+            except ValueError:
+                pass
+    return sorted(set(nalezena))
+
+
+def extract_term(text):
+    """
+    Vrátí termín zájezdu jako (datum_od, datum_do) nebo None.
+    Bere první dvě data nalezená v kartě (odlet a návrat).
+    """
+    data = _vsechna_data(text)
+    if len(data) >= 2:
+        od, do = data[0], data[-1] if len(data) == 2 else data[1]
+        if 0 < (do - od).days <= 60:
+            return (od, do)
+    return None
+
+
+def format_term(term):
+    """Naformátuje termín: '15. 7. – 22. 7. 2026'."""
+    if not term:
+        return None
+    od, do = term
+    return f"{od.day}. {od.month}. – {do.day}. {do.month}. {do.year}"
+
+
 def extract_nights(text):
     """
-    Přečte počet nocí z textu. Tři způsoby (v pořadí spolehlivosti):
-      1) 'X nocí'
-      2) 'X dní/dnů' (Y dní = Y-1 nocí)
-      3) ROZSAH DAT '15.07.2026 - 17.07.2026' -> spočítá noci z rozdílu.
-         Tohle je klíčové u hotelových karet, které délku slovy neuvádějí -
-         právě odtud se dřív propašovaly 2denní termíny.
-    Aby se nepletlo s čísly u vybavení ('2 bazény'), vyžaduje slovo
-    noc/den těsně za číslem.
-    Vrací int nebo None (None = nejde přečíst -> filtr pak nabídku propustí).
+    Přečte počet nocí. Priorita:
+      1) ROZSAH DAT (nejspolehlivější) - spočítá noci z rozdílu datumů
+      2) 'X nocí'
+      3) 'X dní/dnů' (Y dní = Y-1 nocí)
+    Vrací int, nebo None když se délku nepodaří zjistit.
     """
+    term = extract_term(text)
+    if term:
+        return (term[1] - term[0]).days
+
     m = re.search(r"\b(\d{1,2})\s*noc[íieí]*\b", text, re.IGNORECASE)
     if m:
         return int(m.group(1))
@@ -406,33 +490,20 @@ def extract_nights(text):
     if m:
         dni = int(m.group(1))
         return dni - 1 if dni > 1 else dni
-
-    # 3) Rozsah dat: "15.07.2026 - 22.07.2026" (i bez roku u prvního data)
-    m = re.search(
-        r"(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})?\s*[-–—]\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})",
-        text,
-    )
-    if m:
-        d1, m1, y1, d2, m2, y2 = m.groups()
-        try:
-            rok2 = int(y2)
-            rok1 = int(y1) if y1 else rok2
-            od = datetime.date(rok1, int(m1), int(d1))
-            do = datetime.date(rok2, int(m2), int(d2))
-            noci = (do - od).days
-            if 0 < noci <= 60:  # rozumné rozpětí délky zájezdu
-                return noci
-        except ValueError:
-            pass
     return None
 
 
 def passes_min_nights(text):
+    """
+    Zahodí jen nabídky, u kterých PROKAZATELNĚ víme, že jsou kratší než
+    MIN_NOCI. Když délku nejde zjistit, nabídku PUSTÍME (a ve zprávě ji
+    označíme ⚠️) - aby ti nic neuniklo a mohl sis to sám posoudit.
+    """
     if MIN_NOCI is None:
         return True
     nights = extract_nights(text)
     if nights is None:
-        return True  # nejde přečíst -> nezahazujeme
+        return True  # neznámá délka -> raději pošli, ať nic neunikne
     return nights >= MIN_NOCI
 
 
@@ -534,9 +605,11 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         updates[key] = {"ref": price_to_store, "min": price_to_store}
         stats_note_new(stats, price, title)
         if notify:
-            price_line = f"\n💰 {format_price(price)}" if price else ""
+            cena_radek = f"\n💰 <b>{format_price(price)}</b>" if price else "\n💰 <i>cena neuvedena</i>"
             send_telegram(
-                f"✈️ <b>{source_label}</b> · 🆕 NOVÉ{price_line}\n{title}\n{clean_card_text(card_text)}",
+                f"🆕 <b>NOVÁ NABÍDKA</b> · {source_label}\n"
+                f"{zprava_detail(title, card_text, source_label)}"
+                f"{cena_radek}",
                 link=link,
             )
         return 1
@@ -553,12 +626,11 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         updates[key] = {"ref": price, "min": new_min}
         stats_note_discount(stats, sleva, price, title)
         if notify:
-            badge = "\n🏆 <b>Nejnižší cena, jakou jsem u této nabídky kdy viděl!</b>" if is_record else ""
+            badge = "\n🏆 <b>NEJNIŽŠÍ CENA, JAKOU JSEM U TÉTO NABÍDKY VIDĚL!</b>" if is_record else ""
             send_telegram(
-                f"🔻🟥 <b>{source_label}</b> · <b>ZLEVNĚNÍ</b> o {format_price(sleva)}{badge}\n"
-                f"{title}\n"
-                f"Původně {format_price(old_ref)} → nyní <b>{format_price(price)}</b>\n"
-                f"{clean_card_text(card_text)}",
+                f"🔻🟥 <b>ZLEVNĚNÍ o {format_price(sleva)}</b> · {source_label}{badge}\n"
+                f"{zprava_detail(title, card_text, source_label)}\n"
+                f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>",
                 link=link,
             )
         return 1
@@ -569,10 +641,9 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         updates[key] = {"ref": price, "min": old_min if old_min else price}
         if notify:
             send_telegram(
-                f"🔺🟩 <b>{source_label}</b> · <b>ZDRAŽENÍ</b> o {format_price(zdrazeni)}\n"
-                f"{title}\n"
-                f"Původně {format_price(old_ref)} → nyní <b>{format_price(price)}</b>\n"
-                f"{clean_card_text(card_text)}",
+                f"🔺🟩 <b>ZDRAŽENÍ o {format_price(zdrazeni)}</b> · {source_label}\n"
+                f"{zprava_detail(title, card_text, source_label)}\n"
+                f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>",
                 link=link,
             )
         return 1
