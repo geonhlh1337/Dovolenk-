@@ -389,9 +389,14 @@ def passes_price_cap(price):
 
 def extract_nights(text):
     """
-    Přečte počet nocí z textu. Bere jen jasné údaje o délce pobytu:
-    'X nocí' nebo 'X dní/dnů'. Aby se nepletlo s čísly u vybavení
-    ('2 bazény', '3 restaurace'), vyžaduje slovo noc/den těsně za číslem.
+    Přečte počet nocí z textu. Tři způsoby (v pořadí spolehlivosti):
+      1) 'X nocí'
+      2) 'X dní/dnů' (Y dní = Y-1 nocí)
+      3) ROZSAH DAT '15.07.2026 - 17.07.2026' -> spočítá noci z rozdílu.
+         Tohle je klíčové u hotelových karet, které délku slovy neuvádějí -
+         právě odtud se dřív propašovaly 2denní termíny.
+    Aby se nepletlo s čísly u vybavení ('2 bazény'), vyžaduje slovo
+    noc/den těsně za číslem.
     Vrací int nebo None (None = nejde přečíst -> filtr pak nabídku propustí).
     """
     m = re.search(r"\b(\d{1,2})\s*noc[íieí]*\b", text, re.IGNORECASE)
@@ -401,6 +406,24 @@ def extract_nights(text):
     if m:
         dni = int(m.group(1))
         return dni - 1 if dni > 1 else dni
+
+    # 3) Rozsah dat: "15.07.2026 - 22.07.2026" (i bez roku u prvního data)
+    m = re.search(
+        r"(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})?\s*[-–—]\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})",
+        text,
+    )
+    if m:
+        d1, m1, y1, d2, m2, y2 = m.groups()
+        try:
+            rok2 = int(y2)
+            rok1 = int(y1) if y1 else rok2
+            od = datetime.date(rok1, int(m1), int(d1))
+            do = datetime.date(rok2, int(m2), int(d2))
+            noci = (do - od).days
+            if 0 < noci <= 60:  # rozumné rozpětí délky zájezdu
+                return noci
+        except ValueError:
+            pass
     return None
 
 
@@ -564,7 +587,15 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
 def fetch_rendered_html(browser, url):
     page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
     try:
-        page.goto(url, timeout=45000, wait_until="networkidle")
+        # Nečekáme na "networkidle" - weby s reklamami/trackingem mají trvalou
+        # aktivitu na pozadí a síť nikdy neztichne (Exim, Fischer, Dovolenkovani
+        # kvůli tomu padaly na timeout). Počkáme na načtení dokumentu a pak
+        # dáme JS čas nabídky dopočítat.
+        page.goto(url, timeout=60000, wait_until="domcontentloaded")
+        try:
+            page.wait_for_load_state("networkidle", timeout=8000)
+        except Exception:
+            pass  # síť neztichla - nevadí, pokračujeme
         consent_selectors = [
             "button:has-text('Souhlasím')",
             "button:has-text('Rozumím')",
