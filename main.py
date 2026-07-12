@@ -89,7 +89,7 @@ HOTEL_FILTR = [
 # None = bez omezení. Nabídky, u kterých se cenu nepodařilo přečíst,
 # procházejí vždy (ať o ně nepřijdeš omylem).
 MAX_CENA = None
-# MAX_CENA = 25000
+# MAX_CENA = 40000
 
 # Minimální počet nocí. Nabídky kratší se zahodí. None = bez omezení.
 # Pojistka z textu karty - hlavní filtrování dělá URL parametr (nl_length_from
