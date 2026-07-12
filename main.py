@@ -115,6 +115,7 @@ DUVERYHODNE_EGYPT_URL = [
     "https://www.fischer.cz/vysledky-vyhledavani",
     "https://www.fischer.cz/last-minute/egypt",
     "https://www.blue-style.cz/vyhledavani/",
+    "https://dovolenkovani.cz/vyhledavani-zajezdu",
 ]
 
 # Filtr stravy. Vyplníš-li, projdou jen nabídky obsahující některé z těchto
@@ -149,30 +150,74 @@ INVIA_SEARCH_URLS = [
     "https://www.invia.cz/dovolena/?s_action=default&d_start_from=12.07.2026&nl_transportation_id%5B%5D=3_1&nl_transportation_id%5B%5D=3_2&nl_transportation_id%5B%5D=3_3&page=1&nl_occupancy_adults=2&nl_locality_parent_id%5B%5D=626&nl_length_from=7&sort=nl_sell&nl_locality_id%5B%5D=626",
 ]
 
+# Kolik stránek výsledků projít u vyhledávacích URL (page=1..N). Týká se jen
+# URL s vyhledávacími parametry (s_action / nl_country_id / search_form);
+# statické last-minute stránky se čtou jen jednou. Bot přestane listovat
+# dřív, jakmile stránka nevrátí žádné nabídky.
+# POZOR na čas běhu: každá stránka = ~15-20 s v prohlížeči. Při hodinovém
+# spouštění v SOUKROMÉM repozitáři hlídej měsíční limit GitHub Actions
+# (2000 minut zdarma). Veřejný repozitář limit nemá. Hodnota 3 je rozumný
+# kompromis; klidně zvyš na 5, pokud máš repozitář veřejný.
+INVIA_MAX_STRANEK = 3
+
+# Přímé stránky Jaz hotelů na Invii - nejspolehlivější "jen Jaz" zdroj.
+# Každá stránka hotelu obsahuje jeho aktuální termíny a ceny od všech CK,
+# které Invia prodává (včetně Exim Tours, Fischer, Blue Style, Čedok...) -
+# proto NENÍ potřeba přidávat tytéž hotely na ostatních portálech zvlášť.
+# Všechny níže uvedené URL jsou OVĚŘENÉ (z reálného logu bota nebo z
+# vyhledávání). Další Jaz hotel přidáš vložením URL jeho Invia stránky
+# (tvar: https://www.invia.cz/hotel/egypt/<letovisko>/<slug>/).
+INVIA_JAZ_HOTEL_URLS = [
+    # --- Marsa Alam / Madinat Coraya ---
+    "https://www.invia.cz/hotel/egypt/marsa-alam/jaz-elite-riviera/",
+    "https://www.invia.cz/hotel/egypt/marsa-alam/jaz-costa-mares/",
+    "https://www.invia.cz/hotel/egypt/marsa-alam/jaz-costa-mares-adults-only/",
+    "https://www.invia.cz/hotel/egypt/marsa-alam/jaz-elite-amara/",
+    "https://www.invia.cz/hotel/egypt/marsa-alam/jaz-grand-marsa-ex-grand-resta/",
+    "https://www.invia.cz/hotel/egypt/marsa-alam/jaz-solaya-resort/",
+    "https://www.invia.cz/hotel/egypt/marsa-alam/jaz-maraya/",
+    # --- Hurghada / Makadi Bay ---
+    "https://www.invia.cz/hotel/egypt/hurghada/jaz-aquamarine-resort/",
+    "https://www.invia.cz/hotel/egypt/hurghada/jaz-aquaviva/",
+    "https://www.invia.cz/hotel/egypt/hurghada/jaz-makadi-saraya-resort/",
+    "https://www.invia.cz/hotel/egypt/hurghada/jaz-makadi-star-spa/",
+    "https://www.invia.cz/hotel/egypt/hurghada/jaz-makadina-ex-sol-y-mar-club-makadi/",
+]
+
 # --- Blue Style ---
 BLUESTYLE_SEARCH_URLS = [
     "https://www.blue-style.cz/last-minute/",
     "https://www.blue-style.cz/vyhledavani/?depCity=2%2C10%2C11&arrCity=8&dateFrom=2026-07-12&dateTo=2026-08-11&room1=2&priceType=per-person",
+    # Fulltext hledání "Hotel jaz" - první výsledky jsou Jaz hotely, zbytek
+    # (jiné hotely) spolehlivě odfiltruje HOTEL_FILTR.
+    "https://www.blue-style.cz/fulltext/?q=Hotel+jaz",
 ]
 
 # --- Exim Tours a Fischer ---
-# POZNÁMKA: Tyto weby (obě CK patří pod DER Touristik) nevykreslují nabídky
-# jako běžné odkazy - dotahují je až dodatečně z interního API a zobrazují
-# jako interaktivní prvky. Přes prohlížeč se do HTML nedostanou (ověřeno
-# diagnostikou: na stránce jsou jen odkazy na kategorie, ne na konkrétní
-# zájezdy). Zprovoznění by vyžadovalo křehké reverzní rozklíčování jejich
-# API. Není to ale potřeba: nabídky OBOU těchto CK už obsahuje Invia.cz
-# (jsou to její partnerské kanceláře), takže o ně nepřicházíš.
-# Proto jsou zde vypnuté (prázdné seznamy). Kdybys je chtěl v budoucnu
-# zkusit oživit, stačí doplnit URL a upravit check funkce.
+# Fulltext vyhledávač ?q=Jaz vrací přehled všech Jaz hotelů v nabídce
+# (nalezeno uživatelem - na Eximu 33 hotelů). Stránka se vykresluje přes
+# JavaScript, bot ji čte přes Playwright. Odkazy vedou na hotelové stránky
+# (obsahují "hotel-" v cestě), takže je zachytí stávající vzor.
 EXIMTOURS_SEARCH_URLS = [
+    "https://www.eximtours.cz/hledani-vysledky?q=Jaz",
     "https://www.eximtours.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&m=5&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682|4308|4392|4309&tt=1",
     "https://www.eximtours.cz/last-minute/egypt",
 ]
 
 FISCHER_SEARCH_URLS = [
+    # Stejná platforma jako Exim (DER Touristik) - stejný fulltext vyhledávač.
+    # (Neověřeno naživo; pokud by vracel chybu, bot ji jen zaloguje a pokračuje.)
+    "https://www.fischer.cz/hledani-vysledky?q=Jaz",
     "https://www.fischer.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682&tt=1",
     "https://www.fischer.cz/last-minute/egypt",
+]
+
+# --- Dovolenkovani.cz ---
+# Srovnávač zájezdů. URL níže je vyfiltrovaná na egyptská letoviska,
+# termín +12 měsíců, 7-25 nocí, 2 dospělí, odlety Praha/Brno/Ostrava,
+# řazeno od nejlevnějšího. HOTEL_FILTR z výsledků vybere jen Jaz.
+DOVOLENKOVANI_SEARCH_URLS = [
+    "https://dovolenkovani.cz/vyhledavani-zajezdu/1?di%5B0%5D=2460&di%5B1%5D=146&di%5B2%5D=758&di%5B3%5D=761&di%5B4%5D=762&di%5B5%5D=2433&di%5B6%5D=1007&di%5B7%5D=147&di%5B8%5D=148&di%5B9%5D=149&di%5B10%5D=145&di%5B11%5D=2416&di%5B12%5D=2461&di%5B13%5D=150&di%5B14%5D=144&di%5B15%5D=1010&di%5B16%5D=1011&di%5B17%5D=1012&di%5B18%5D=1013&di%5B19%5D=1014&df=2026-07-11&dt=2027-07-11&uf=1&ut=25&ac=2&cc=0&rooms%5B0%5D=18%2C18&ti=1&ai%5B0%5D=1&ai%5B1%5D=2&ai%5B2%5D=3&ar=5&pf=5000&pt=1000000",
 ]
 
 # ============================================================
@@ -635,26 +680,73 @@ def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
     return results
 
 
+def _je_vyhledavaci_url(url):
+    """Vyhledávací URL podporují stránkování (page=N), statické stránky ne."""
+    return any(k in url for k in ("s_action=", "nl_country_id=", "search_form"))
+
+
+def _url_se_strankou(url, page):
+    """Vrátí URL pro danou stránku výsledků (page=1 vrací původní URL)."""
+    if page == 1:
+        return url
+    if "page=" in url:
+        return re.sub(r"([?&])page=\d+", rf"\g<1>page={page}", url)
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}page={page}"
+
+
 def check_invia(seen, updates, stats, notify, browser):
     detail_pattern = re.compile(r"/zajezd/\?s_offer_id=", re.IGNORECASE)
+
+    # 1) Vyhledávací a last-minute stránky (se stránkováním u vyhledávacích)
     for url in INVIA_SEARCH_URLS:
+        max_stranek = INVIA_MAX_STRANEK if _je_vyhledavaci_url(url) else 1
+        found_celkem = 0
+        for page in range(1, max_stranek + 1):
+            page_url = _url_se_strankou(url, page)
+            try:
+                html = fetch_rendered_html(browser, page_url)
+            except Exception as e:
+                print(f"Invia chyba ({page_url}): {e}")
+                break
+            soup = BeautifulSoup(html, "html.parser")
+            if page == 1:
+                diagnostika_vypis(soup, "Invia")
+            offers = parse_offers_from_soup(soup, detail_pattern)
+            if not offers:
+                # Stránka bez nabídek = konec výsledků, dál nelistujeme.
+                break
+            for href, title, card_text in offers:
+                found_celkem += process_offer(
+                    "invia", "Invia.cz", "https://www.invia.cz",
+                    seen, updates, stats, notify, href, title, card_text,
+                    trusted=is_trusted_url(url))
+        strany = f" (prošel až {max_stranek} stránek)" if max_stranek > 1 else ""
+        print(f"Invia ({url}){strany}: {found_celkem} nových/zlevněných nabídek.")
+
+    # 2) Přímé stránky Jaz hotelů - jen Jaz, termíny konkrétního hotelu.
+    #    Jsou to egyptské Jaz stránky, takže trusted=True (destinaci neřešíme;
+    #    filtr Jaz stejně platí vždy a projde díky slugu v URL).
+    for url in INVIA_JAZ_HOTEL_URLS:
         try:
             html = fetch_rendered_html(browser, url)
         except Exception as e:
-            print(f"Invia chyba ({url}): {e}")
+            print(f"Invia Jaz hotel chyba ({url}): {e}")
             continue
         soup = BeautifulSoup(html, "html.parser")
-        diagnostika_vypis(soup, "Invia")
         found = 0
         for href, title, card_text in parse_offers_from_soup(soup, detail_pattern):
-            found += process_offer("invia", "Invia.cz", "https://www.invia.cz",
+            # Kartám z hotelové stránky doplníme jméno hotelu ze slugu URL,
+            # kdyby ho text karty neobsahoval (kvůli klíči a čitelné zprávě).
+            found += process_offer("invia", "Invia.cz (Jaz hotel)", "https://www.invia.cz",
                                    seen, updates, stats, notify, href, title, card_text,
-                                   trusted=is_trusted_url(url))
-        print(f"Invia ({url}): {found} nových/zlevněných nabídek.")
+                                   trusted=True)
+        print(f"Invia Jaz hotel ({url}): {found} nových/zlevněných nabídek.")
 
 
 def check_bluestyle(seen, updates, stats, notify, browser):
-    detail_pattern = re.compile(r"/zajezd", re.IGNORECASE)
+    # /zajezd = konkrétní zájezdy; hotel[-/] = hotelové stránky z fulltextu
+    detail_pattern = re.compile(r"/(zajezd|hotel[-/])", re.IGNORECASE)
     for url in BLUESTYLE_SEARCH_URLS:
         try:
             html = fetch_rendered_html(browser, url)
@@ -706,6 +798,25 @@ def check_fischer(seen, updates, stats, notify, browser):
         print(f"Fischer ({url}): {found} nových/zlevněných nabídek.")
 
 
+def check_dovolenkovani(seen, updates, stats, notify, browser):
+    # Detail zájezdu/hotelu poznáme podle "zajezd" nebo "hotel" v cestě
+    # odkazu; nerelevantní odkazy (navigace) spolehlivě odfiltruje HOTEL_FILTR.
+    detail_pattern = re.compile(r"/(zajezd|hotel)[-/]?", re.IGNORECASE)
+    for url in DOVOLENKOVANI_SEARCH_URLS:
+        try:
+            html = fetch_rendered_html(browser, url)
+        except Exception as e:
+            print(f"Dovolenkovani chyba ({url}): {e}")
+            continue
+        soup = BeautifulSoup(html, "html.parser")
+        found = 0
+        for href, title, card_text in parse_offers_from_soup(soup, detail_pattern, min_text_len=15):
+            found += process_offer("dovolenkovani", "Dovolenkovani.cz", "https://dovolenkovani.cz",
+                                   seen, updates, stats, notify, href, title, card_text,
+                                   trusted=is_trusted_url(url))
+        print(f"Dovolenkovani ({url}): {found} nových/zlevněných nabídek.")
+
+
 def main():
     first_run = not os.path.exists(SEEN_FILE)
     seen = load_seen()
@@ -734,6 +845,7 @@ def main():
                 ("Blue Style", check_bluestyle),
                 ("Exim Tours", check_eximtours),
                 ("Fischer", check_fischer),
+                ("Dovolenkovani", check_dovolenkovani),
             ]
             for nazev, fn in zdroje:
                 try:
