@@ -1,5 +1,7 @@
 import os
 import re
+import sys
+import html
 import json
 import time
 import hashlib
@@ -8,8 +10,11 @@ import requests
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
-BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+if not BOT_TOKEN or not CHAT_ID:
+    raise SystemExit("CHYBA: Chybí TELEGRAM_BOT_TOKEN nebo TELEGRAM_CHAT_ID "
+                     "v prostředí (secrets ve workflow).")
 
 SEEN_FILE = "seen.json"
 STATS_FILE = "stats.json"
@@ -20,7 +25,15 @@ STATS_FILE = "stats.json"
 
 # Filtr odletových letišť. Bot pošle nabídku jen tehdy, když text karty
 # obsahuje některé z těchto slov. Prázdný seznam ([]) = filtr vypnutý.
-LETISTE_FILTR = ["Praha", "Brno", "Ostrava"]
+# POZOR: kvůli skloňování používáme KMENY slov - "Prah" chytí Praha,
+# Prahy, Praze i "z Prahy". Nepiš sem celá slova jako "Praha".
+LETISTE_FILTR = ["Prah", "Brn", "Ostrav"]
+
+# Pojistka proti záplavě zpráv: maximum Telegram zpráv za jeden běh.
+# Když web změní vzhled nebo se pokazí seen.json, bot by jinak mohl poslat
+# stovky zpráv (a při 4 s/zprávu i spálit minuty GitHub Actions). Zprávy
+# nad limit se jen zalogují a na konci přijde jedno upozornění s počtem.
+MAX_ZPRAV_ZA_BEH = 25
 
 # Diagnostika: když je True, u Exim Tours a Fischer se do logu vypíše
 # ukázka skutečně nalezených odkazů na stránce. Slouží k jednorázovému
@@ -286,7 +299,23 @@ def save_stats(stats):
         json.dump(stats, f, ensure_ascii=False, indent=0)
 
 
+# Počítadla zpráv za běh (pojistka MAX_ZPRAV_ZA_BEH).
+_poslano_zprav = 0
+_potlaceno_zprav = 0
+
+
 def send_telegram(text, link=None):
+    """Pošle zprávu, ale nejvýš MAX_ZPRAV_ZA_BEH za jeden běh (pojistka)."""
+    global _poslano_zprav, _potlaceno_zprav
+    if _poslano_zprav >= MAX_ZPRAV_ZA_BEH:
+        _potlaceno_zprav += 1
+        print(f"Zpráva POTLAČENA (limit {MAX_ZPRAV_ZA_BEH}/běh): {text[:80]!r}")
+        return
+    _poslano_zprav += 1
+    _telegram_post(text, link)
+
+
+def _telegram_post(text, link=None):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
@@ -341,7 +370,9 @@ def zprava_detail(title, card_text, source_label):
     hotel = (title or "").strip()
     if not hotel or hotel.lower() in ("nabídka last minute", "hotel"):
         hotel = clean_card_text(card_text)[:60]
-    radky.append(f"🏨 <b>{hotel}</b>")
+    # html.escape: názvy z webu mohou obsahovat &, < nebo > - bez escapování
+    # by Telegram (parse_mode=HTML) zprávu odmítl a vůbec by nedorazila.
+    radky.append(f"🏨 <b>{html.escape(hotel)}</b>")
 
     # Termín + počet nocí
     term = extract_term(card_text)
@@ -380,15 +411,20 @@ def clean_card_text(text):
 def passes_airport_filter(text):
     if not LETISTE_FILTR:
         return True
-    # Když text obsahuje NĚJAKÉ z našich letišť, musí sedět.
-    if any(l.lower() in text.lower() for l in LETISTE_FILTR):
+    t = text.lower()
+    # Když text obsahuje NĚKTERÝ z našich kmenů (Prah/Brn/Ostrav), sedí.
+    # Kmeny chytí i skloňované tvary: "z Prahy", "odlet z Brna", "v Ostravě".
+    if any(l.lower() in t for l in LETISTE_FILTR):
         return True
     # Když karta neuvádí žádné odletové letiště vůbec (typicky přehledové
     # hotelové karty bez termínu), nezahazujeme ji - odletiště stejně řeší
     # filtr přímo v URL (nl_transportation / vyhledávání z ČR).
-    znama_letiste = ["praha", "brno", "ostrava", "katovice", "pardubice",
-                     "katowice", "wien", "vídeň", "bratislava", "letiště", "odlet"]
-    if not any(z in text.lower() for z in znama_letiste):
+    # I zde kmeny, aby "z Katovic" / "z Vídně" spolehlivě znamenalo "karta
+    # letiště uvádí" a cizí odlet se správně zahodil.
+    znama_letiste = ["prah", "brn", "ostrav", "katovic", "pardubic",
+                     "katowic", "wien", "vídeň", "vídn", "bratislav",
+                     "letiště", "odlet"]
+    if not any(z in t for z in znama_letiste):
         return True
     return False
 
@@ -457,7 +493,7 @@ def extract_term(text):
     """
     data = _vsechna_data(text)
     if len(data) >= 2:
-        od, do = data[0], data[-1] if len(data) == 2 else data[1]
+        od, do = data[0], data[1]
         if 0 < (do - od).days <= 60:
             return (od, do)
     return None
@@ -538,10 +574,10 @@ def send_weekly_summary(stats):
     lines.append(f"🔻 Zaznamenaných zlevnění: {stats['zlevneni']}")
     if stats["nejvetsi_sleva"]:
         s = stats["nejvetsi_sleva"]
-        lines.append(f"🏅 Největší sleva: {format_price(s['castka'])} – {s['titulek']}")
+        lines.append(f"🏅 Největší sleva: {format_price(s['castka'])} – {html.escape(s['titulek'])}")
     if stats["nejlevnejsi"]:
         n = stats["nejlevnejsi"]
-        lines.append(f"💸 Nejlevnější nabídka: {format_price(n['cena'])} – {n['titulek']}")
+        lines.append(f"💸 Nejlevnější nabídka: {format_price(n['cena'])} – {html.escape(n['titulek'])}")
     if stats["novych"] == 0 and stats["zlevneni"] == 0:
         lines.append("Tento týden se neobjevilo nic nového.")
     send_telegram("\n".join(lines))
@@ -655,39 +691,63 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
     return 0
 
 
+# Plný UA řetězec reálného Chromu - holé "Mozilla/5.0 (Windows...)" vypadá
+# botovsky a některé weby (Dovolenkovani) na něj odmítaly odpovědět.
+_USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+
+# Obrázky, fonty a videa bot nepotřebuje (čte jen text/odkazy) - jejich
+# blokování výrazně zrychlí načítání a šetří minuty GitHub Actions.
+_BLOKOVANE_ZDROJE = {"image", "font", "media"}
+
+
+def _blokuj_zbytecne(route):
+    if route.request.resource_type in _BLOKOVANE_ZDROJE:
+        route.abort()
+    else:
+        route.continue_()
+
+
 def fetch_rendered_html(browser, url):
-    page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+    page = browser.new_page(user_agent=_USER_AGENT)
     try:
+        page.route("**/*", _blokuj_zbytecne)
         # Nečekáme na "networkidle" - weby s reklamami/trackingem mají trvalou
         # aktivitu na pozadí a síť nikdy neztichne (Exim, Fischer, Dovolenkovani
         # kvůli tomu padaly na timeout). Počkáme na načtení dokumentu a pak
         # dáme JS čas nabídky dopočítat.
-        page.goto(url, timeout=60000, wait_until="domcontentloaded")
+        # goto zkoušíme 2x - pomalé weby občas první pokus nestihnou.
+        posledni = None
+        for pokus in range(2):
+            try:
+                page.goto(url, timeout=45000, wait_until="domcontentloaded")
+                posledni = None
+                break
+            except Exception as e:
+                posledni = e
+                print(f"  goto pokus {pokus + 1} selhal ({url[:80]}...), zkouším znovu")
+        if posledni is not None:
+            raise posledni
         try:
             page.wait_for_load_state("networkidle", timeout=8000)
         except Exception:
             pass  # síť neztichla - nevadí, pokračujeme
-        consent_selectors = [
-            "button:has-text('Souhlasím')",
-            "button:has-text('Rozumím')",
-            "button:has-text('Přijmout')",
-            "button:has-text('Přijmout vše')",
-            "button:has-text('Povolit')",
-            "button:has-text('Accept')",
-            "button:has-text('Accept all')",
-            "#didomi-notice-agree-button",
-        ]
-        for selector in consent_selectors:
+        # Cookie/consent dialog: jeden kombinovaný dotaz místo smyčky přes
+        # 8 selektorů po 2 s (ta na stránkách bez dialogu pálila až 16 s).
+        consent_selector = (
+            "button:has-text('Souhlasím'), button:has-text('Rozumím'), "
+            "button:has-text('Přijmout'), button:has-text('Povolit'), "
+            "button:has-text('Accept'), #didomi-notice-agree-button"
+        )
+        try:
+            page.locator(consent_selector).first.click(timeout=2500)
             try:
-                page.click(selector, timeout=2000)
-                try:
-                    page.wait_for_load_state("networkidle", timeout=10000)
-                except Exception:
-                    pass
-                page.wait_for_timeout(1000)
-                break
+                page.wait_for_load_state("networkidle", timeout=8000)
             except Exception:
-                continue
+                pass
+            page.wait_for_timeout(1000)
+        except Exception:
+            pass  # žádný dialog - jedeme dál
         page.wait_for_timeout(2000)
         html = None
         last_error = None
@@ -804,46 +864,51 @@ def check_invia(seen, updates, stats, notify, browser):
     for url in INVIA_SEARCH_URLS:
         max_stranek = INVIA_MAX_STRANEK if _je_vyhledavaci_url(url) else 1
         found_celkem = 0
+        karet_celkem = 0
         for page in range(1, max_stranek + 1):
             page_url = _url_se_strankou(url, page)
             try:
-                html = fetch_rendered_html(browser, page_url)
+                page_html = fetch_rendered_html(browser, page_url)
             except Exception as e:
                 print(f"Invia chyba ({page_url}): {e}")
                 break
-            soup = BeautifulSoup(html, "html.parser")
+            soup = BeautifulSoup(page_html, "html.parser")
             if page == 1:
                 diagnostika_vypis(soup, "Invia")
             offers = parse_offers_from_soup(soup, detail_pattern)
             if not offers:
                 # Stránka bez nabídek = konec výsledků, dál nelistujeme.
                 break
+            karet_celkem += len(offers)
             for href, title, card_text in offers:
                 found_celkem += process_offer(
                     "invia", "Invia.cz", "https://www.invia.cz",
                     seen, updates, stats, notify, href, title, card_text,
                     trusted=is_trusted_url(url))
         strany = f" (prošel až {max_stranek} stránek)" if max_stranek > 1 else ""
-        print(f"Invia ({url}){strany}: {found_celkem} nových/zlevněných nabídek.")
+        # "0 karet" = parsování/web nefunguje; "X karet, 0 nových" = jen nic nového.
+        print(f"Invia ({url}){strany}: {karet_celkem} karet, "
+              f"{found_celkem} nových/zlevněných.")
 
     # 2) Přímé stránky Jaz hotelů - jen Jaz, termíny konkrétního hotelu.
     #    Jsou to egyptské Jaz stránky, takže trusted=True (destinaci neřešíme;
     #    filtr Jaz stejně platí vždy a projde díky slugu v URL).
     for url in INVIA_JAZ_HOTEL_URLS:
         try:
-            html = fetch_rendered_html(browser, url)
+            page_html = fetch_rendered_html(browser, url)
         except Exception as e:
             print(f"Invia Jaz hotel chyba ({url}): {e}")
             continue
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(page_html, "html.parser")
         found = 0
-        for href, title, card_text in parse_offers_from_soup(soup, detail_pattern):
+        offers = parse_offers_from_soup(soup, detail_pattern)
+        for href, title, card_text in offers:
             # Kartám z hotelové stránky doplníme jméno hotelu ze slugu URL,
             # kdyby ho text karty neobsahoval (kvůli klíči a čitelné zprávě).
             found += process_offer("invia", "Invia.cz (Jaz hotel)", "https://www.invia.cz",
                                    seen, updates, stats, notify, href, title, card_text,
                                    trusted=True)
-        print(f"Invia Jaz hotel ({url}): {found} nových/zlevněných nabídek.")
+        print(f"Invia Jaz hotel ({url}): {len(offers)} karet, {found} nových/zlevněných.")
 
 
 def check_bluestyle(seen, updates, stats, notify, browser):
@@ -851,53 +916,56 @@ def check_bluestyle(seen, updates, stats, notify, browser):
     detail_pattern = re.compile(r"/(zajezd|hotel[-/])", re.IGNORECASE)
     for url in BLUESTYLE_SEARCH_URLS:
         try:
-            html = fetch_rendered_html(browser, url)
+            page_html = fetch_rendered_html(browser, url)
         except Exception as e:
             print(f"Blue Style chyba ({url}): {e}")
             continue
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(page_html, "html.parser")
         found = 0
-        for href, title, card_text in parse_offers_from_soup(soup, detail_pattern):
+        offers = parse_offers_from_soup(soup, detail_pattern)
+        for href, title, card_text in offers:
             found += process_offer("bluestyle", "Blue Style", "https://www.blue-style.cz",
                                    seen, updates, stats, notify, href, title, card_text,
                                    trusted=is_trusted_url(url))
-        print(f"Blue Style ({url}): {found} nových/zlevněných nabídek.")
+        print(f"Blue Style ({url}): {len(offers)} karet, {found} nových/zlevněných.")
 
 
 def check_eximtours(seen, updates, stats, notify, browser):
     detail_pattern = re.compile(r"/(zajezd|hotel)[-/]", re.IGNORECASE)
     for url in EXIMTOURS_SEARCH_URLS:
         try:
-            html = fetch_rendered_html(browser, url)
+            page_html = fetch_rendered_html(browser, url)
         except Exception as e:
             print(f"Exim Tours chyba ({url}): {e}")
             continue
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(page_html, "html.parser")
         diagnostika_vypis(soup, "Exim Tours")
         found = 0
-        for href, title, card_text in parse_offers_from_soup(soup, detail_pattern, min_text_len=15):
+        offers = parse_offers_from_soup(soup, detail_pattern, min_text_len=15)
+        for href, title, card_text in offers:
             found += process_offer("eximtours", "Exim Tours", "https://www.eximtours.cz",
                                    seen, updates, stats, notify, href, title, card_text,
                                    trusted=is_trusted_url(url))
-        print(f"Exim Tours ({url}): {found} nových/zlevněných nabídek.")
+        print(f"Exim Tours ({url}): {len(offers)} karet, {found} nových/zlevněných.")
 
 
 def check_fischer(seen, updates, stats, notify, browser):
     detail_pattern = re.compile(r"/(zajezd|hotel)[-/]", re.IGNORECASE)
     for url in FISCHER_SEARCH_URLS:
         try:
-            html = fetch_rendered_html(browser, url)
+            page_html = fetch_rendered_html(browser, url)
         except Exception as e:
             print(f"Fischer chyba ({url}): {e}")
             continue
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(page_html, "html.parser")
         diagnostika_vypis(soup, "Fischer")
         found = 0
-        for href, title, card_text in parse_offers_from_soup(soup, detail_pattern, min_text_len=15):
+        offers = parse_offers_from_soup(soup, detail_pattern, min_text_len=15)
+        for href, title, card_text in offers:
             found += process_offer("fischer", "Fischer", "https://www.fischer.cz",
                                    seen, updates, stats, notify, href, title, card_text,
                                    trusted=is_trusted_url(url))
-        print(f"Fischer ({url}): {found} nových/zlevněných nabídek.")
+        print(f"Fischer ({url}): {len(offers)} karet, {found} nových/zlevněných.")
 
 
 def check_dovolenkovani(seen, updates, stats, notify, browser):
@@ -906,22 +974,30 @@ def check_dovolenkovani(seen, updates, stats, notify, browser):
     detail_pattern = re.compile(r"/(zajezd|hotel)[-/]?", re.IGNORECASE)
     for url in DOVOLENKOVANI_SEARCH_URLS:
         try:
-            html = fetch_rendered_html(browser, url)
+            page_html = fetch_rendered_html(browser, url)
         except Exception as e:
             print(f"Dovolenkovani chyba ({url}): {e}")
             continue
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(page_html, "html.parser")
         found = 0
-        for href, title, card_text in parse_offers_from_soup(soup, detail_pattern, min_text_len=15):
+        offers = parse_offers_from_soup(soup, detail_pattern, min_text_len=15)
+        for href, title, card_text in offers:
             found += process_offer("dovolenkovani", "Dovolenkovani.cz", "https://dovolenkovani.cz",
                                    seen, updates, stats, notify, href, title, card_text,
                                    trusted=is_trusted_url(url))
-        print(f"Dovolenkovani ({url}): {found} nových/zlevněných nabídek.")
+        print(f"Dovolenkovani ({url}): {len(offers)} karet, {found} nových/zlevněných.")
 
 
 def main():
-    first_run = not os.path.exists(SEEN_FILE)
+    # Řádkové flushování stdout - v GitHub Actions je jinak výstup vidět až
+    # na konci běhu a nejde sledovat průběh ani poznat, kde běh visí.
+    sys.stdout.reconfigure(line_buffering=True)
+
     seen = load_seen()
+    # První běh = soubor neexistuje NEBO se nepodařilo nic načíst (poškozený
+    # seen.json). Jinak by se po poškození souboru poslala záplava "nových"
+    # nabídek (limit MAX_ZPRAV_ZA_BEH je až druhá pojistka).
+    first_run = not os.path.exists(SEEN_FILE) or not seen
     updates = {}
 
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -966,6 +1042,15 @@ def main():
         print(f"Zpracováno {len(updates)} nových/aktualizovaných nabídek.")
     else:
         print("Žádné nové nabídky.")
+
+    # Pokud pojistka potlačila zprávy, pošli o tom JEDNO upozornění
+    # (mimo limit, přes _telegram_post) - ať víš, že se máš podívat do logu.
+    if _potlaceno_zprav:
+        _telegram_post(
+            f"⚠️ Dosažen limit {MAX_ZPRAV_ZA_BEH} zpráv za běh - "
+            f"{_potlaceno_zprav} dalších zpráv bylo potlačeno. "
+            f"Podrobnosti najdeš v logu GitHub Actions."
+        )
 
 
 if __name__ == "__main__":
