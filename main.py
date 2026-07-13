@@ -147,13 +147,17 @@ STRAVA_FILTR = [
 # Pozn.: Samostatné stránky /cestovni-kancelare/ck-.../ jsou jen rozcestníky
 # bez konkrétních nabídek, proto je nepoužíváme (vracely by 0).
 INVIA_SEARCH_URLS = [
-    # Obecné last-minute stránky (filtr Egypt+Jaz je pročistí):
-    "https://www.invia.cz/dovolena/last-minute/",
-    "https://www.invia.cz/dovolena/last-minute-z-brna/",
-    "https://www.invia.cz/dovolena/last-minute-ostrava/",
-    # Cílené egyptské last-minute stránky:
-    "https://www.invia.cz/dovolena/last-minute/egypt/",
-    "https://www.invia.cz/dovolena/last-minute/egypt/marsa-alam/",
+    # ZEŠTÍHLENO podle reálných logů (07/2026): obecné last-minute stránky
+    # dlouhodobě nosily 0 nových a egyptské last-minute stránky vracely
+    # 0 karet (rozbité parsování/prázdné stránky). Hlavní úlovky nosí
+    # hotelové stránky níže + tato dvě vyhledávání, která navíc hlídají
+    # NOVÉ Jaz hotely mimo seznam INVIA_JAZ_HOTEL_URLS.
+    # Kdyby bylo potřeba, odkomentuj:
+    # "https://www.invia.cz/dovolena/last-minute/",
+    # "https://www.invia.cz/dovolena/last-minute-z-brna/",
+    # "https://www.invia.cz/dovolena/last-minute-ostrava/",
+    # "https://www.invia.cz/dovolena/last-minute/egypt/",
+    # "https://www.invia.cz/dovolena/last-minute/egypt/marsa-alam/",
     # CELÝ EGYPT - vyhledávání přes nl_country_id=11 (pokrývá VŠECHNA egyptská
     # letoviska najednou, kde Jaz má hotel), 7+ nocí, 2 dospělí, letecky z ČR,
     # řazeno od nejlevnějšího. Tohle je hlavní zdroj pro kompletní přehled Jaz
@@ -199,38 +203,41 @@ INVIA_JAZ_HOTEL_URLS = [
 
 # --- Blue Style ---
 BLUESTYLE_SEARCH_URLS = [
-    "https://www.blue-style.cz/last-minute/",
-    "https://www.blue-style.cz/vyhledavani/?depCity=2%2C10%2C11&arrCity=8&dateFrom=2026-07-12&dateTo=2026-08-11&room1=2&priceType=per-person",
+    # ZEŠTÍHLENO: obecná last-minute a vyhledávací stránka nosily dlouhodobě
+    # 0 nových (Jaz nabídky Blue Stylu navíc chodí i přes Invii). Fulltext
+    # "Hotel jaz" je jediný, který reálně nosil úlovky. Odkomentuj v případě potřeby:
+    # "https://www.blue-style.cz/last-minute/",
+    # "https://www.blue-style.cz/vyhledavani/?depCity=2%2C10%2C11&arrCity=8&dateFrom=2026-07-12&dateTo=2026-08-11&room1=2&priceType=per-person",
     # Fulltext hledání "Hotel jaz" - první výsledky jsou Jaz hotely, zbytek
     # (jiné hotely) spolehlivě odfiltruje HOTEL_FILTR.
     "https://www.blue-style.cz/fulltext/?q=Hotel+jaz",
 ]
 
 # --- Exim Tours a Fischer ---
-# Fulltext vyhledávač ?q=Jaz vrací přehled všech Jaz hotelů v nabídce
-# (nalezeno uživatelem - na Eximu 33 hotelů). Stránka se vykresluje přes
-# JavaScript, bot ji čte přes Playwright. Odkazy vedou na hotelové stránky
-# (obsahují "hotel-" v cestě), takže je zachytí stávající vzor.
+# VYPNUTO podle reálných logů (07/2026): Fischer vracel 0 karet na všech
+# URL (nejspíš blokace/jiná struktura) a Exim jen 1-8 karet bez jediného
+# úlovku. Nabídky OBOU CK přitom chodí přes Invii (agreguje 120+ CK včetně
+# hotelových stránek Jaz), takže o nic nepřicházíš - jen se šetří ~1,5 min
+# za běh. Kdyby ses chtěl vrátit, odkomentuj URL níže.
 EXIMTOURS_SEARCH_URLS = [
-    "https://www.eximtours.cz/hledani-vysledky?q=Jaz",
-    "https://www.eximtours.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&m=5&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682|4308|4392|4309&tt=1",
-    "https://www.eximtours.cz/last-minute/egypt",
+    # "https://www.eximtours.cz/hledani-vysledky?q=Jaz",
+    # "https://www.eximtours.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&m=5&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682|4308|4392|4309&tt=1",
+    # "https://www.eximtours.cz/last-minute/egypt",
 ]
 
 FISCHER_SEARCH_URLS = [
-    # Stejná platforma jako Exim (DER Touristik) - stejný fulltext vyhledávač.
-    # (Neověřeno naživo; pokud by vracel chybu, bot ji jen zaloguje a pokračuje.)
-    "https://www.fischer.cz/hledani-vysledky?q=Jaz",
-    "https://www.fischer.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682&tt=1",
-    "https://www.fischer.cz/last-minute/egypt",
+    # "https://www.fischer.cz/hledani-vysledky?q=Jaz",
+    # "https://www.fischer.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682&tt=1",
+    # "https://www.fischer.cz/last-minute/egypt",
 ]
 
 # --- Dovolenkovani.cz ---
-# Srovnávač zájezdů. URL níže je vyfiltrovaná na egyptská letoviska,
-# termín +12 měsíců, 7-25 nocí, 2 dospělí, odlety Praha/Brno/Ostrava,
-# řazeno od nejlevnějšího. HOTEL_FILTR z výsledků vybere jen Jaz.
+# VYPNUTO: web opakovaně neodpovídá z GitHub Actions (timeout i s plným
+# Chrome user-agentem a 2 pokusy) - nejspíš blokuje IP adresy datacenter.
+# Každý běh tak jen pálil ~2,5 minuty. Je to srovnávač, jehož nabídky
+# stejně pokrývá Invia. Kdyby ses k němu chtěl vrátit, odkomentuj URL níže.
 DOVOLENKOVANI_SEARCH_URLS = [
-    "https://dovolenkovani.cz/vyhledavani-zajezdu/1?di%5B0%5D=2460&di%5B1%5D=146&di%5B2%5D=758&di%5B3%5D=761&di%5B4%5D=762&di%5B5%5D=2433&di%5B6%5D=1007&di%5B7%5D=147&di%5B8%5D=148&di%5B9%5D=149&di%5B10%5D=145&di%5B11%5D=2416&di%5B12%5D=2461&di%5B13%5D=150&di%5B14%5D=144&di%5B15%5D=1010&di%5B16%5D=1011&di%5B17%5D=1012&di%5B18%5D=1013&di%5B19%5D=1014&df=2026-07-11&dt=2027-07-11&uf=1&ut=25&ac=2&cc=0&rooms%5B0%5D=18%2C18&ti=1&ai%5B0%5D=1&ai%5B1%5D=2&ai%5B2%5D=3&ar=5&pf=5000&pt=1000000",
+    # "https://dovolenkovani.cz/vyhledavani-zajezdu/1?di%5B0%5D=2460&di%5B1%5D=146&di%5B2%5D=758&di%5B3%5D=761&di%5B4%5D=762&di%5B5%5D=2433&di%5B6%5D=1007&di%5B7%5D=147&di%5B8%5D=148&di%5B9%5D=149&di%5B10%5D=145&di%5B11%5D=2416&di%5B12%5D=2461&di%5B13%5D=150&di%5B14%5D=144&di%5B15%5D=1010&di%5B16%5D=1011&di%5B17%5D=1012&di%5B18%5D=1013&di%5B19%5D=1014&df=2026-07-11&dt=2027-07-11&uf=1&ut=25&ac=2&cc=0&rooms%5B0%5D=18%2C18&ti=1&ai%5B0%5D=1&ai%5B1%5D=2&ai%5B2%5D=3&ar=5&pf=5000&pt=1000000",
 ]
 
 # ============================================================
@@ -384,17 +391,17 @@ def zprava_detail(title, card_text, source_label):
     else:
         radky.append("🌙 ⚠️ <i>délka pobytu neuvedena – zkontroluj v odkazu</i>")
 
-    # Strava (když ji karta uvádí)
-    for strava in ["All inclusive", "Ultra all inclusive", "Plná penze",
-                   "Polopenze", "Snídaně", "Bez stravy"]:
-        if strava.lower() in card_text.lower():
-            radky.append(f"🍽 {strava}")
-            break
+    # Strava (když ji karta uvádí) - helper zkouší delší názvy dřív,
+    # takže "Ultra all inclusive" se správně rozliší od "All inclusive".
+    strava = _strava_z_textu(card_text)
+    if strava:
+        radky.append(f"🍽 {strava}")
 
-    # Odletové letiště (když ho karta uvádí)
-    for letiste in ["Praha", "Brno", "Ostrava"]:
-        if letiste.lower() in card_text.lower():
-            radky.append(f"✈️ Odlet: {letiste}")
+    # Odletové letiště (když ho karta uvádí) - hledáme kmenem, aby se
+    # chytly i skloňované tvary ("z Prahy", "odlet z Brna").
+    for kmen, nazev in [("prah", "Praha"), ("brn", "Brno"), ("ostrav", "Ostrava")]:
+        if kmen in card_text.lower():
+            radky.append(f"✈️ Odlet: {nazev}")
             break
 
     return "\n".join(radky)
@@ -548,10 +555,59 @@ def is_trusted_url(url):
     return any(url.startswith(prefix) for prefix in DUVERYHODNE_EGYPT_URL)
 
 
-def make_offer_key(source, base_path, card_text):
-    date_match = re.search(r"\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}", card_text)
-    date_part = date_match.group(0) if date_match else ""
-    return f"{source}:{short_hash(f'{base_path}|{date_part}')}"
+# Pořadí je důležité: delší/specifičtější názvy dřív ("Ultra all inclusive"
+# se musí zkusit před "All inclusive", jinak by se nikdy nenašel).
+STRAVY = ["Ultra all inclusive", "All inclusive", "Plná penze",
+          "Polopenze", "Snídaně", "Bez stravy"]
+
+
+def _strava_z_textu(text):
+    """Vrátí typ stravy nalezený v textu karty, nebo prázdný řetězec."""
+    t = text.lower()
+    for s in STRAVY:
+        if s.lower() in t:
+            return s
+    return ""
+
+
+def _normalizuj_titulek(title):
+    """
+    Stabilní otisk titulku pro klíč nabídky: malá písmena, bez číslic a
+    mezer. Z názvu hotelu zbyde stabilní řetězec ("jazaquamarineresort"),
+    z ceny v titulku ("od 15 880 Kč") zbyde jen neškodná konstanta.
+    """
+    t = re.sub(r"[\d\s\xa0]+", "", (title or "").lower())
+    return t[:60]
+
+
+def _hotel_ze_slugu(url):
+    """
+    Z Invia URL hotelu vytáhne čitelné jméno:
+    .../hotel/egypt/marsa-alam/jaz-solaya-resort/ -> "Jaz Solaya Resort"
+    """
+    m = re.search(r"/hotel/[^/]+/[^/]+/([^/?#]+)", url)
+    if not m:
+        return ""
+    return m.group(1).replace("-", " ").strip().title()
+
+
+def make_offer_key(source, base_path, card_text, title=""):
+    """
+    Klíč nabídky. Na Invii vedou VŠECHNY karty na /zajezd/?s_offer_id=...,
+    takže base_path je pro všechny stejný - klíč proto musí obsahovat i
+    celý termín (od-do), stravu a titulek. Jinak se různé termíny téhož
+    hotelu přepisují navzájem a bot hlásí falešná zlevnění/zdražení
+    (ping-pong stejné částky tam a zpět).
+    """
+    term = extract_term(card_text)
+    if term:
+        date_part = f"{term[0].isoformat()}_{term[1].isoformat()}"
+    else:
+        date_match = re.search(r"\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}", card_text)
+        date_part = date_match.group(0) if date_match else ""
+    strava = _strava_z_textu(card_text)
+    titulek = _normalizuj_titulek(title)
+    return f"{source}:{short_hash(f'{base_path}|{date_part}|{strava}|{titulek}')}"
 
 
 def stats_note_new(stats, price, title):
@@ -633,7 +689,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         return 0
 
     base_path = href.split("?")[0]
-    key = make_offer_key(source, base_path, card_text)
+    key = make_offer_key(source, base_path, card_text, title)
     link = href if href.startswith("http") else base_url + href
     price_to_store = price if price is not None else 0
 
@@ -901,10 +957,14 @@ def check_invia(seen, updates, stats, notify, browser):
             continue
         soup = BeautifulSoup(page_html, "html.parser")
         found = 0
+        # Jméno hotelu ze slugu URL: anchor text karet na hotelové stránce
+        # je totiž CENA ("od 15 880 Kč"), ne název - bez náhrady by cena
+        # skončila ve zprávě jako 🏨 název i v klíči nabídky.
+        hotel_ze_slugu = _hotel_ze_slugu(url)
         offers = parse_offers_from_soup(soup, detail_pattern)
         for href, title, card_text in offers:
-            # Kartám z hotelové stránky doplníme jméno hotelu ze slugu URL,
-            # kdyby ho text karty neobsahoval (kvůli klíči a čitelné zprávě).
+            if hotel_ze_slugu:
+                title = hotel_ze_slugu
             found += process_offer("invia", "Invia.cz (Jaz hotel)", "https://www.invia.cz",
                                    seen, updates, stats, notify, href, title, card_text,
                                    trusted=True)
