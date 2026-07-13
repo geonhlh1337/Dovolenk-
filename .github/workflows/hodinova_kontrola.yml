@@ -1,10 +1,24 @@
-
-name: Kontrola last minute zajezdu
+# Travel bot - kontrola last minute nabídek (Jaz / Egypt)
+# Soubor patří do repozitáře jako: .github/workflows/kontrola.yml
+name: kontrola
 
 on:
   schedule:
-    - cron: "0 * * * *"   # kazdou celou hodinu
-  workflow_dispatch: {}    # umozni i rucni spusteni z GitHub webu
+    # Každé 2 hodiny mezi 7:00 a 23:00 českého LETNÍHO času (UTC+2),
+    # tj. 9 běhů denně. V noci se ceny nemění, není co hlídat.
+    # Při ~5-6 min/běh je to ~1 500 minut měsíčně - vejde se do limitu
+    # 2 000 minut zdarma pro soukromý repozitář.
+    # POZOR: v zimě (UTC+1) se časy posunou o hodinu - případně uprav na
+    # "0 6-22/2 * * *".
+    - cron: "0 5-21/2 * * *"
+  # Ruční spuštění tlačítkem "Run workflow" v záložce Actions.
+  workflow_dispatch:
+
+# Běhy se nesmí překrývat - praly by se o seen.json při git push.
+# Nový běh počká, až doběhne předchozí (cancel-in-progress: false).
+concurrency:
+  group: travel-bot
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -12,31 +26,61 @@ permissions:
 jobs:
   kontrola:
     runs-on: ubuntu-latest
-    steps:
-      - name: Stahnout repozitar
-        uses: actions/checkout@v4
+    # Pojistka: zaseklý běh nespálí hodiny minut z měsíčního limitu.
+    timeout-minutes: 20
+    env:
+      # Živý výstup v logu - bez toho Python vše vypíše až na konci
+      # a nejde poznat, na které URL běh visí.
+      PYTHONUNBUFFERED: "1"
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
-      - name: Nastavit Python
-        uses: actions/setup-python@v5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip   # vyžaduje requirements.txt v kořeni repozitáře
 
-      - name: Nainstalovat zavislosti
+      - name: Instalace závislostí
         run: pip install -r requirements.txt
 
-      - name: Nainstalovat prohlizec pro Playwright
-        run: playwright install --with-deps chromium
+      # Chromium (~150 MB) se stahuje jen když cache chybí - šetří ~1 min/běh.
+      - name: Cache Playwright prohlížeče
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
-      - name: Spustit kontrolu nabidek
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Instalace Chromium (jen bez cache)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: python -m playwright install --with-deps chromium
+
+      - name: Systémové závislosti Chromia (s cache)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: python -m playwright install-deps chromium
+
+      - name: Spuštění bota
         run: python main.py
 
-      - name: Ulozit aktualizovany stav zpet do repozitare
+      - name: Uložení stavu (seen.json, stats.json)
         run: |
           git config user.name "travel-bot"
           git config user.email "travel-bot@users.noreply.github.com"
           git add seen.json stats.json
           git diff --staged --quiet || git commit -m "Aktualizace stavu bota"
+          # Kdyby mezitím do repa přibyl jiný commit, rebase push zachrání.
+          git pull --rebase --autostash
           git push
+
+      # Když CELÝ běh spadne (ne jen jeden zdroj - ty bot přežívá sám),
+      # přijde upozornění na Telegram s odkazem na log. Jinak by se pád
+      # projevil jen tichem, kterého by sis všiml až za dlouho.
+      - name: Upozornění na pád běhu
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            --data-urlencode text="❌ Běh travel bota SELHAL. Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
