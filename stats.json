@@ -1,7 +1,7 @@
 {
 "week": "2026-W29",
-"novych": 64,
-"zlevneni": 117,
+"novych": 65,
+"zlevneni": 132,
 "nejvetsi_sleva": {
 "castka": 18227,
 "titulek": "od3 306Kčza os."
@@ -9,5 +9,6 @@
 "nejlevnejsi": {
 "cena": 3306,
 "titulek": "od3 306Kčza os."
-}
+},
+"zdrazeni": 12
 }
