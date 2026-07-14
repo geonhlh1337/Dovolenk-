@@ -1,86 +1,67 @@
-# Travel bot - kontrola last minute nabídek (Jaz / Egypt)
-# Soubor patří do repozitáře jako: .github/workflows/kontrola.yml
-name: kontrola
+# Ulož jako .github/workflows/lastminute.yml
+# Pokud se tvůj skript jmenuje jinak než lastminute_bot.py, uprav poslední krok.
+name: Last minute bot
 
 on:
   schedule:
-    # Každé 2 hodiny mezi 7:00 a 23:00 českého LETNÍHO času (UTC+2),
-    # tj. 9 běhů denně. V noci se ceny nemění, není co hlídat.
-    # Při ~5-6 min/běh je to ~1 500 minut měsíčně - vejde se do limitu
-    # 2 000 minut zdarma pro soukromý repozitář.
-    # POZOR: v zimě (UTC+1) se časy posunou o hodinu - případně uprav na
-    # "0 6-22/2 * * *".
-    - cron: "0 5-21/2 * * *"
-  # Ruční spuštění tlačítkem "Run workflow" v záložce Actions.
-  workflow_dispatch:
+    # Každou hodinu. Minuta 7 záměrně - v celou hodinu jsou fronty GitHubu
+    # přetížené a plánované běhy se zpožďují nebo přeskakují.
+    - cron: "7 * * * *"
+  workflow_dispatch: {}   # ruční spuštění tlačítkem
 
-# Běhy se nesmí překrývat - praly by se o seen.json při git push.
-# Nový běh počká, až doběhne předchozí (cancel-in-progress: false).
+# Nikdy nesmí běžet dva běhy naráz - přepisovaly by si seen.json.
+# cancel-in-progress: false = nový běh počká, rozběhnutý se nezabíjí.
 concurrency:
-  group: travel-bot
+  group: lastminute-bot
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: write   # kvůli commitu seen.json/stats.json zpět do repa
 
 jobs:
-  kontrola:
+  run:
     runs-on: ubuntu-latest
-    # Pojistka: zaseklý běh nespálí hodiny minut z měsíčního limitu.
-    timeout-minutes: 20
-    env:
-      # Živý výstup v logu - bez toho Python vše vypíše až na konci
-      # a nejde poznat, na které URL běh visí.
-      PYTHONUNBUFFERED: "1"
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
+    timeout-minutes: 25   # pojistka proti visícímu prohlížeči
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: pip   # vyžaduje requirements.txt v kořeni repozitáře
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
 
-      - name: Instalace závislostí
+      - name: Install Python deps
         run: pip install -r requirements.txt
 
-      # Chromium (~150 MB) se stahuje jen když cache chybí - šetří ~1 min/běh.
-      - name: Cache Playwright prohlížeče
-        id: playwright-cache
+      # Cache Chromu (~150 MB) - bez ní se stahuje každý běh (~1 min).
+      - name: Cache Playwright browsers
+        id: pw-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
-      - name: Instalace Chromium (jen bez cache)
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: python -m playwright install --with-deps chromium
+      - name: Install Playwright Chromium
+        run: playwright install --with-deps chromium
 
-      - name: Systémové závislosti Chromia (s cache)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: python -m playwright install-deps chromium
+      - name: Run bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python lastminute_bot.py
 
-      - name: Spuštění bota
-        run: python main.py
-
-      - name: Uložení stavu (seen.json, stats.json)
+      # Uložení paměti bota zpět do repa. Pull --rebase řeší situaci, kdy
+      # mezitím někdo (nebo jiný běh) pushnul - jinak by push spadl.
+      - name: Commit state
         run: |
-          git config user.name "travel-bot"
-          git config user.email "travel-bot@users.noreply.github.com"
+          git config user.name "lastminute-bot"
+          git config user.email "actions@users.noreply.github.com"
           git add seen.json stats.json
-          git diff --staged --quiet || git commit -m "Aktualizace stavu bota"
-          # Kdyby mezitím do repa přibyl jiný commit, rebase push zachrání.
-          git pull --rebase --autostash
-          git push
-
-      # Když CELÝ běh spadne (ne jen jeden zdroj - ty bot přežívá sám),
-      # přijde upozornění na Telegram s odkazem na log. Jinak by se pád
-      # projevil jen tichem, kterého by sis všiml až za dlouho.
-      - name: Upozornění na pád běhu
-        if: failure()
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            --data-urlencode text="❌ Běh travel bota SELHAL. Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if git diff --cached --quiet; then
+            echo "Žádná změna stavu."
+          else
+            git commit -m "chore: update bot state [skip ci]"
+            git pull --rebase
+            git push
+          fi
