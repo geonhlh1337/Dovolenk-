@@ -114,6 +114,15 @@ MIN_NOCI = 7
 # False = chodí jen zlevnění 🔻 (a nové nabídky).
 OZNAMOVAT_ZDRAZENI = True
 
+# Minimální změna ceny (Kč), aby přišla zpráva o zlevnění/zdražení.
+# Weby s cenami drobně "šumí" (přepočty kurzu, palivové příplatky) a bot
+# by jinak posílal ping-pong zpráv o pár desetikorunách. Změny menší než
+# tento práh se NEHLÁSÍ a referenční cena se NEMĚNÍ - drobné poklesy se
+# tak sčítají a zpráva přijde, jakmile celkový rozdíl práh překročí.
+# (Historické minimum se ale sleduje vždy, i u malých poklesů.)
+# 0 = hlásit každou změnu jako dřív.
+MIN_ZMENA_CENY = 300
+
 # URL, které už samy vrací jen požadovanou zemi (vyfiltrované parametry přímo
 # na webu - tvoje vyhledávací URL). Na nabídky z těchto URL se filtr
 # DESTINACE_FILTR NEAPLIKUJE - bereš vše, co vrátí. Porovnává se podle
@@ -171,11 +180,10 @@ INVIA_SEARCH_URLS = [
 # URL s vyhledávacími parametry (s_action / nl_country_id / search_form);
 # statické last-minute stránky se čtou jen jednou. Bot přestane listovat
 # dřív, jakmile stránka nevrátí žádné nabídky.
-# POZOR na čas běhu: každá stránka = ~15-20 s v prohlížeči. Při hodinovém
-# spouštění v SOUKROMÉM repozitáři hlídej měsíční limit GitHub Actions
-# (2000 minut zdarma). Veřejný repozitář limit nemá. Hodnota 3 je rozumný
-# kompromis; klidně zvyš na 5, pokud máš repozitář veřejný.
-INVIA_MAX_STRANEK = 3
+# Repozitář je VEŘEJNÝ = minuty GitHub Actions se nepočítají, takže si
+# můžeme dovolit 5 stránek (víc už obvykle nenosí nic - jsou to drahé
+# nabídky na konci řazení podle ceny).
+INVIA_MAX_STRANEK = 5
 
 # Přímé stránky Jaz hotelů na Invii - nejspolehlivější "jen Jaz" zdroj.
 # Každá stránka hotelu obsahuje jeho aktuální termíny a ceny od všech CK,
@@ -258,7 +266,8 @@ def load_seen():
         return {}
     # Ochrana: kdyby se do seen.json omylem dostal obsah stats.json
     # (klíče week/novych/zlevneni/...), bereme ho jako prázdný a začneme znovu.
-    STATS_KLICE = {"week", "novych", "zlevneni", "nejvetsi_sleva", "nejlevnejsi"}
+    STATS_KLICE = {"week", "novych", "zlevneni", "zdrazeni",
+                   "nejvetsi_sleva", "nejlevnejsi"}
     if STATS_KLICE & set(data.keys()):
         print("VAROVÁNÍ: seen.json obsahoval data statistik - resetuji na prázdný.")
         return {}
@@ -284,6 +293,7 @@ def default_stats(week):
         "week": week,
         "novych": 0,
         "zlevneni": 0,
+        "zdrazeni": 0,
         "nejvetsi_sleva": None,   # {"castka": int, "titulek": str}
         "nejlevnejsi": None,      # {"cena": int, "titulek": str}
     }
@@ -366,6 +376,17 @@ def extract_price(text):
 
 def format_price(value):
     return f"{value:,}".replace(",", " ") + " Kč"
+
+
+def _za_noc(price, card_text):
+    """
+    Vrátí ' (2 268 Kč/noc)' - přepočet ceny na noc, když známe cenu i délku
+    pobytu. Skvělé pro rychlé porovnání nabídek s různým počtem nocí.
+    """
+    noci = extract_nights(card_text)
+    if price and noci:
+        return f" ({format_price(round(price / noci))}/noc)"
+    return ""
 
 
 def zprava_detail(title, card_text, source_label):
@@ -628,6 +649,7 @@ def send_weekly_summary(stats):
     lines = ["📊 <b>Týdenní přehled last minute bota</b>"]
     lines.append(f"🆕 Nových nabídek: {stats['novych']}")
     lines.append(f"🔻 Zaznamenaných zlevnění: {stats['zlevneni']}")
+    lines.append(f"🔺 Zaznamenaných zdražení: {stats.get('zdrazeni', 0)}")
     if stats["nejvetsi_sleva"]:
         s = stats["nejvetsi_sleva"]
         lines.append(f"🏅 Největší sleva: {format_price(s['castka'])} – {html.escape(s['titulek'])}")
@@ -697,7 +719,11 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         updates[key] = {"ref": price_to_store, "min": price_to_store}
         stats_note_new(stats, price, title)
         if notify:
-            cena_radek = f"\n💰 <b>{format_price(price)}</b>" if price else "\n💰 <i>cena neuvedena</i>"
+            if price:
+                cena_radek = (f"\n💰 <b>{format_price(price)}</b>"
+                              f"{_za_noc(price, card_text)}")
+            else:
+                cena_radek = "\n💰 <i>cena neuvedena</i>"
             send_telegram(
                 f"🆕 <b>NOVÁ NABÍDKA</b> · {source_label}\n"
                 f"{zprava_detail(title, card_text, source_label)}"
@@ -715,14 +741,26 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         sleva = old_ref - price
         is_record = bool(old_min) and price < old_min
         new_min = min(price, old_min) if old_min else price
+        if sleva < MIN_ZMENA_CENY:
+            # Drobný pokles (cenový šum): nehlásíme a referenční cenu
+            # NEMĚNÍME - malé poklesy se tak sčítají a zpráva přijde,
+            # jakmile celkový rozdíl překročí MIN_ZMENA_CENY. Historické
+            # minimum si ale zapamatujeme i tak.
+            updates[key] = {"ref": old_ref, "min": new_min}
+            return 0
         updates[key] = {"ref": price, "min": new_min}
         stats_note_discount(stats, sleva, price, title)
         if notify:
             badge = "\n🏆 <b>NEJNIŽŠÍ CENA, JAKOU JSEM U TÉTO NABÍDKY VIDĚL!</b>" if is_record else ""
+            # Když to není rekord, ukážeme pro kontext dosavadní minimum -
+            # hned vidíš, jestli má smysl čekat na další pokles.
+            min_radek = (f"\n📉 Nejnižší viděná: {format_price(new_min)}"
+                         if old_min and not is_record else "")
             send_telegram(
                 f"🔻🟥 <b>ZLEVNĚNÍ o {format_price(sleva)}</b> · {source_label}{badge}\n"
                 f"{zprava_detail(title, card_text, source_label)}\n"
-                f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>",
+                f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>"
+                f"{_za_noc(price, card_text)}{min_radek}",
                 link=link,
             )
         return 1
@@ -730,12 +768,18 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
     # ZDRAŽENÍ 🔺
     if OZNAMOVAT_ZDRAZENI and price and old_ref and price > old_ref:
         zdrazeni = price - old_ref
+        if zdrazeni < MIN_ZMENA_CENY:
+            # Drobný nárůst: nehlásíme, ref necháváme (nárůsty se sčítají).
+            updates[key] = {"ref": old_ref, "min": old_min if old_min else price}
+            return 0
         updates[key] = {"ref": price, "min": old_min if old_min else price}
+        stats["zdrazeni"] = stats.get("zdrazeni", 0) + 1
         if notify:
             send_telegram(
                 f"🔺🟩 <b>ZDRAŽENÍ o {format_price(zdrazeni)}</b> · {source_label}\n"
                 f"{zprava_detail(title, card_text, source_label)}\n"
-                f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>",
+                f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>"
+                f"{_za_noc(price, card_text)}",
                 link=link,
             )
         return 1
