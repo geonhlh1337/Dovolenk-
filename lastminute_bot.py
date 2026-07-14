@@ -132,12 +132,16 @@ MIN_ZMENA_CENY = 300
 DUVERYHODNE_EGYPT_URL = [
     # Invia vyhledávací URL sem ZÁMĚRNĚ nedávám - ověřeno, že vrací i jiné
     # země, takže na ně necháváme platit filtr Egyptu (spolehlivější).
-    "https://www.eximtours.cz/vysledky-vyhledavani",
-    "https://www.eximtours.cz/last-minute/egypt",
-    "https://www.fischer.cz/vysledky-vyhledavani",
-    "https://www.fischer.cz/last-minute/egypt",
-    "https://www.blue-style.cz/vyhledavani/",
-    "https://dovolenkovani.cz/vyhledavani-zajezdu",
+    
+
+"https://www.cedok.cz/vysledky-vyhledavani/dovolena/egypt/?participants%5B0%5D%5Badults%5D=2",
+
+"https://www.tui.cz/dovolena/vyhledavani-vysledku-letu?utm_source=google&utm_medium=cpc&gclsrc=aw.ds&utm_campaign=TUI_CZ_Brand_Search&utm_content=TUI_Brand_General&gad_source=1&gad_campaignid=23011590665&gbraid=0AAAAAp02wIu_qEAvV8RLN9Qs-jhm0G7BT&gclid=CjwKCAjwvNfSBhBiEiwAyaGMCVbs_s1RPCgI7zSBdOJeu_rdsBEj5Z6wuNgOp2A1HP1hHyhqufcGKBoCwJsQAvD_BwE&q=%3Aprice%3AbyPlane%3AT%3Aa%3ABRQ%3Aa%3AOSR%3Aa%3APRG%3AdF%3A6%3AdT%3A8%3ActAdult%3A2%3ActChild%3A0%3Ac%3AHRG%3Ac%3ARMF%3AminHotelCategory%3AdefaultHotelCategory%3AtripAdvisorRating%3AdefaultTripAdvisorRating%3Abeach_distance%3AdefaultBeachDistance%3AflightDuration%3AdefaultFlightDuration%3AtripType%3AWS&fullPrice=false",
+
+"https://www.blue-style.cz/vyhledavani/?dateFrom=2026-07-15&dateTo=2026-08-14&room1=2&priceType=per-person&stars=5STAR%2C5PLUS&luxuries=190",
+
+"https://www.eximtours.cz/hledani-vysledky?q=Jaz",
+
 ]
 
 # Filtr stravy. Vyplníš-li, projdou jen nabídky obsahující některé z těchto
