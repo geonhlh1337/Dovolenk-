@@ -22,7 +22,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 25   # pojistka proti visícímu prohlížeči
+    timeout-minutes: 100  # pojistka proti visícímu prohlížeči
     steps:
       - uses: actions/checkout@v4
 
