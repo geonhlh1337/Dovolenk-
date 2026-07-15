@@ -4,9 +4,10 @@ name: Last minute bot
 
 on:
   schedule:
-    # Každou hodinu. Minuta 7 záměrně - v celou hodinu jsou fronty GitHubu
-    # přetížené a plánované běhy se zpožďují nebo přeskakují.
-    - cron: "7 * * * *"
+    # Každých 30 minut (repo je veřejné = minuty zdarma bez limitu).
+    # Minuty 7 a 37 záměrně - v celou/půl jsou fronty GitHubu přetížené
+    # a plánované běhy se zpožďují nebo přeskakují.
+    - cron: "7,37 * * * *"
   workflow_dispatch: {}   # ruční spuštění tlačítkem
 
 # Nikdy nesmí běžet dva běhy naráz - přepisovaly by si seen.json.
