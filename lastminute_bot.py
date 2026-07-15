@@ -33,7 +33,7 @@ LETISTE_FILTR = ["Prah", "Brn", "Ostrav"]
 # Když web změní vzhled nebo se pokazí seen.json, bot by jinak mohl poslat
 # stovky zpráv (a při 4 s/zprávu i spálit minuty GitHub Actions). Zprávy
 # nad limit se jen zalogují a na konci přijde jedno upozornění s počtem.
-MAX_ZPRAV_ZA_BEH = 30
+MAX_ZPRAV_ZA_BEH = 25
 
 # Diagnostika: když je True, u Exim Tours a Fischer se do logu vypíše
 # ukázka skutečně nalezených odkazů na stránce. Slouží k jednorázovému
@@ -123,6 +123,26 @@ OZNAMOVAT_ZDRAZENI = True
 # 0 = hlásit každou změnu jako dřív.
 MIN_ZMENA_CENY = 300
 
+# Hlídání ZMIZELÝCH nabídek: když nabídka, kterou bot zná, nepřijde
+# v ZMIZENI_PO_BEZICH bězích po sobě, pošle se ⌛ upozornění (nejspíš
+# vyprodáno / stažena). Počítá se jen u nabídek viděných v posledních
+# 14 dnech a jen když běh přečetl dost karet (ochrana proti falešným
+# poplachům při výpadku webu). Užitečný signál "příště neváhej".
+OZNAMOVAT_ZMIZENI = True
+ZMIZENI_PO_BEZICH = 3
+
+# Denní digest: jedna ranní zpráva s TOP 5 nejlevnějšími Jaz nabídkami
+# přepočtenými na cenu za NOC (z nabídek viděných tentýž den; každý hotel
+# nejvýš jednou). Hodina je v UTC: 5 UTC = 7:00 letního / 6:00 zimního
+# českého času. Vypnutí: DENNI_DIGEST = False.
+DENNI_DIGEST = True
+DIGEST_HODINA_UTC = 5
+
+# Číst i strukturovaná data JSON-LD ze stránek (ceny, které weby vkládají
+# pro Google)? Doplní cenu u karet, kde ji nejde přečíst z textu. Nic
+# nepřidává navíc, jen zpřesňuje - a přežije i změnu vzhledu webu.
+POUZIT_JSONLD = True
+
 # URL, které už samy vrací jen požadovanou zemi (vyfiltrované parametry přímo
 # na webu - tvoje vyhledávací URL). Na nabídky z těchto URL se filtr
 # DESTINACE_FILTR NEAPLIKUJE - bereš vše, co vrátí. Porovnává se podle
@@ -132,16 +152,12 @@ MIN_ZMENA_CENY = 300
 DUVERYHODNE_EGYPT_URL = [
     # Invia vyhledávací URL sem ZÁMĚRNĚ nedávám - ověřeno, že vrací i jiné
     # země, takže na ně necháváme platit filtr Egyptu (spolehlivější).
-    
-
-"https://www.cedok.cz/vysledky-vyhledavani/dovolena/egypt/?participants%5B0%5D%5Badults%5D=2",
-
-"https://www.tui.cz/dovolena/vyhledavani-vysledku-letu?utm_source=google&utm_medium=cpc&gclsrc=aw.ds&utm_campaign=TUI_CZ_Brand_Search&utm_content=TUI_Brand_General&gad_source=1&gad_campaignid=23011590665&gbraid=0AAAAAp02wIu_qEAvV8RLN9Qs-jhm0G7BT&gclid=CjwKCAjwvNfSBhBiEiwAyaGMCVbs_s1RPCgI7zSBdOJeu_rdsBEj5Z6wuNgOp2A1HP1hHyhqufcGKBoCwJsQAvD_BwE&q=%3Aprice%3AbyPlane%3AT%3Aa%3ABRQ%3Aa%3AOSR%3Aa%3APRG%3AdF%3A6%3AdT%3A8%3ActAdult%3A2%3ActChild%3A0%3Ac%3AHRG%3Ac%3ARMF%3AminHotelCategory%3AdefaultHotelCategory%3AtripAdvisorRating%3AdefaultTripAdvisorRating%3Abeach_distance%3AdefaultBeachDistance%3AflightDuration%3AdefaultFlightDuration%3AtripType%3AWS&fullPrice=false",
-
-"https://www.blue-style.cz/vyhledavani/?dateFrom=2026-07-15&dateTo=2026-08-14&room1=2&priceType=per-person&stars=5STAR%2C5PLUS&luxuries=190",
-
-"https://www.eximtours.cz/hledani-vysledky?q=Jaz",
-
+    "https://www.eximtours.cz/vysledky-vyhledavani",
+    "https://www.eximtours.cz/last-minute/egypt",
+    "https://www.fischer.cz/vysledky-vyhledavani",
+    "https://www.fischer.cz/last-minute/egypt",
+    "https://www.blue-style.cz/vyhledavani/",
+    "https://dovolenkovani.cz/vyhledavani-zajezdu",
 ]
 
 # Filtr stravy. Vyplníš-li, projdou jen nabídky obsahující některé z těchto
@@ -211,6 +227,25 @@ INVIA_JAZ_HOTEL_URLS = [
     "https://www.invia.cz/hotel/egypt/hurghada/jaz-makadi-saraya-resort/",
     "https://www.invia.cz/hotel/egypt/hurghada/jaz-makadi-star-spa/",
     "https://www.invia.cz/hotel/egypt/hurghada/jaz-makadina-ex-sol-y-mar-club-makadi/",
+    # --- Sharm El Sheikh (ověřeno 07/2026) ---
+    "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-mirabel-beach-resort/",
+    "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-mirabel-park-club/",
+    "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-mirabel-park/",
+    "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-mirabel-club/",
+    "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-fanara-resort-residence/",
+    "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-fanara-resort/",
+    "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-fanara-residence/",
+    "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-sharm-dreams/",
+    "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-belvedere/",
+    # --- Almaza Bay / Marsa Matrouh (ověřeno 07/2026) ---
+    "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-almaza-beach-resort/",
+    "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-almaza-blue/",
+    "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-viva-almaza-blue/",
+    "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-almazino/",
+    "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-sakhra/",
+    "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-tamerina/",
+    "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-oriental-resort/",
+    "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-crystal-resort/",
 ]
 
 # --- Blue Style ---
@@ -278,9 +313,13 @@ def load_seen():
     out = {}
     for k, v in data.items():
         if isinstance(v, dict):
-            out[k] = {"ref": v.get("ref", 0), "min": v.get("min", 0)}
-            if "d" in v:
-                out[k]["d"] = v["d"]
+            zaznam = {"ref": v.get("ref", 0), "min": v.get("min", 0)}
+            # Metadata: d=datum posledního spatření, t=titulek, n=noci,
+            # u=odkaz, miss=počet běhů bez spatření, gone=ohlášeno zmizení.
+            for extra in ("d", "t", "n", "u", "miss", "gone"):
+                if extra in v:
+                    zaznam[extra] = v[extra]
+            out[k] = zaznam
         else:  # starší formát (klic -> cena)
             out[k] = {"ref": v, "min": v}
     return out
@@ -380,6 +419,27 @@ def extract_price(text):
 
 def format_price(value):
     return f"{value:,}".replace(",", " ") + " Kč"
+
+
+# Kolik karet nabídek běh celkem přečetl - ochrana hlídání zmizelých
+# nabídek: když weby nevrátí skoro nic (výpadek), zmizení se nepočítá.
+_karet_parsovano = 0
+
+
+def _pridej_meta(entry, title, card_text, link):
+    """
+    Doplní do záznamu v seen.json metadata pro denní digest a hlídání
+    zmizelých nabídek: t=titulek, n=počet nocí, u=odkaz.
+    """
+    t = (title or "").strip()
+    if t:
+        entry["t"] = t[:60]
+    n = extract_nights(card_text)
+    if n:
+        entry["n"] = n
+    if link:
+        entry["u"] = link
+    return entry
 
 
 def _za_noc(price, card_text):
@@ -665,6 +725,136 @@ def send_weekly_summary(stats):
     send_telegram("\n".join(lines))
 
 
+def extract_jsonld_prices(soup):
+    """
+    Vytáhne ceny ze strukturovaných dat <script type="application/ld+json">
+    (data, která weby vkládají pro Google). Vrací slovník {url: cena}.
+    Odolnější než čtení textu karet - přežije i změnu vzhledu webu.
+    """
+    ceny = {}
+
+    def projdi(obj):
+        if isinstance(obj, dict):
+            url = obj.get("url") or obj.get("@id")
+            cena = obj.get("price") or obj.get("lowPrice")
+            offers_pole = obj.get("offers")
+            if cena is None and isinstance(offers_pole, dict):
+                cena = offers_pole.get("price") or offers_pole.get("lowPrice")
+            if isinstance(url, str) and cena is not None:
+                try:
+                    c = int(float(str(cena).replace(" ", "").replace(",", ".")))
+                    if 3000 <= c <= 500000:
+                        ceny[url] = c
+                except (ValueError, TypeError):
+                    pass
+            for v in obj.values():
+                projdi(v)
+        elif isinstance(obj, list):
+            for v in obj:
+                projdi(v)
+
+    for tag in soup.find_all("script", type="application/ld+json"):
+        try:
+            projdi(json.loads(tag.string or ""))
+        except Exception:
+            continue
+    return ceny
+
+
+def doplnit_ceny_z_jsonld(soup, offers, base_url):
+    """
+    U karet BEZ čitelné ceny zkusí doplnit cenu ze strukturovaných dat
+    JSON-LD (párování podle URL nabídky). Nové nabídky nevytváří, jen
+    zpřesňuje existující karty.
+    """
+    if not POUZIT_JSONLD or not offers:
+        return offers
+    ld = extract_jsonld_prices(soup)
+    if not ld:
+        return offers
+    out = []
+    doplneno = 0
+    for href, title, card_text in offers:
+        if extract_price(card_text) is None:
+            plna = href if href.startswith("http") else base_url + href
+            cena = ld.get(href) or ld.get(plna)
+            if cena:
+                card_text = f"{card_text} od {cena} Kč"
+                doplneno += 1
+        out.append((href, title, card_text))
+    if doplneno:
+        print(f"  JSON-LD doplnil cenu u {doplneno} karet.")
+    return out
+
+
+def hlidej_zmizele(seen, updates, today_str):
+    """
+    Nabídkám, které v tomto běhu nepřišly, zvýší počítadlo 'miss'.
+    Po ZMIZENI_PO_BEZICH bězích bez spatření pošle ⌛ upozornění
+    (jednorázově - záznam se označí 'gone'). Když se nabídka znovu
+    objeví, počítadlo se automaticky vynuluje (záznam přepíší updates).
+    """
+    if not OZNAMOVAT_ZMIZENI:
+        return
+    if _karet_parsovano < 10:
+        # Weby skoro nic nevrátily (výpadek/blokace) - nepočítat zmizení,
+        # jinak by po jednom rozbitém běhu přišla vlna falešných ⌛ zpráv.
+        print(f"Jen {_karet_parsovano} karet za běh - hlídání zmizelých přeskočeno.")
+        return
+    dnes = datetime.date.fromisoformat(today_str)
+    for k, v in seen.items():
+        if k in updates or v.get("gone"):
+            continue
+        d = v.get("d")
+        try:
+            stari = (dnes - datetime.date.fromisoformat(d)).days if d else 999
+        except ValueError:
+            stari = 999
+        if stari > 14:
+            continue  # stará nabídka - zmizení už není zajímavé
+        v["miss"] = v.get("miss", 0) + 1
+        if v["miss"] >= ZMIZENI_PO_BEZICH:
+            v["gone"] = True
+            titulek = html.escape(v.get("t") or "Nabídka")
+            cena = f" (naposledy {format_price(v['ref'])})" if v.get("ref") else ""
+            send_telegram(
+                f"⌛ <b>Nabídka zmizela z výsledků</b>{cena}\n"
+                f"🏨 {titulek}\n"
+                f"<i>Neobjevila se {ZMIZENI_PO_BEZICH} kontroly po sobě – "
+                f"nejspíš vyprodáno nebo stažena.</i>",
+                link=v.get("u"),
+            )
+
+
+def send_daily_digest(seen, today_str):
+    """
+    TOP 5 nejlevnějších Jaz nabídek přepočtených na cenu za NOC
+    z nabídek viděných dnes. Každý hotel/titulek nejvýš jednou
+    (bere se jeho nejlevnější termín).
+    """
+    nejlepsi = {}  # titulek -> (kc_za_noc, cena, noci, odkaz)
+    for v in seen.values():
+        if v.get("d") != today_str or v.get("gone"):
+            continue
+        ref, noci, t = v.get("ref"), v.get("n"), v.get("t")
+        if not ref or not noci or not t:
+            continue
+        za_noc = ref / noci
+        if t not in nejlepsi or za_noc < nejlepsi[t][0]:
+            nejlepsi[t] = (za_noc, ref, noci, v.get("u"))
+    if not nejlepsi:
+        return
+    lines = ["🌅 <b>Ranní přehled – nejlevnější Jaz za noc</b>"]
+    serazeno = sorted(nejlepsi.items(), key=lambda kv: kv[1][0])
+    for t, (za_noc, ref, noci, link) in serazeno[:5]:
+        nazev = html.escape(t)
+        if link:
+            nazev = f'<a href="{html.escape(link)}">{nazev}</a>'
+        lines.append(f"• {nazev}: <b>{format_price(int(round(za_noc)))}/noc</b>"
+                     f" ({format_price(ref)} / {noci} nocí)")
+    send_telegram("\n".join(lines))
+
+
 def prune_seen(seen, updates, today_str, max_age_days=60):
     """
     Úklid paměti: nabídkám viděným v tomto běhu nastaví dnešní datum,
@@ -720,7 +910,8 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
     price_to_store = price if price is not None else 0
 
     if key not in seen and key not in updates:
-        updates[key] = {"ref": price_to_store, "min": price_to_store}
+        updates[key] = _pridej_meta(
+            {"ref": price_to_store, "min": price_to_store}, title, card_text, link)
         stats_note_new(stats, price, title)
         if notify:
             if price:
@@ -750,9 +941,11 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
             # NEMĚNÍME - malé poklesy se tak sčítají a zpráva přijde,
             # jakmile celkový rozdíl překročí MIN_ZMENA_CENY. Historické
             # minimum si ale zapamatujeme i tak.
-            updates[key] = {"ref": old_ref, "min": new_min}
+            updates[key] = _pridej_meta(
+                {"ref": old_ref, "min": new_min}, title, card_text, link)
             return 0
-        updates[key] = {"ref": price, "min": new_min}
+        updates[key] = _pridej_meta(
+            {"ref": price, "min": new_min}, title, card_text, link)
         stats_note_discount(stats, sleva, price, title)
         if notify:
             badge = "\n🏆 <b>NEJNIŽŠÍ CENA, JAKOU JSEM U TÉTO NABÍDKY VIDĚL!</b>" if is_record else ""
@@ -774,9 +967,13 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         zdrazeni = price - old_ref
         if zdrazeni < MIN_ZMENA_CENY:
             # Drobný nárůst: nehlásíme, ref necháváme (nárůsty se sčítají).
-            updates[key] = {"ref": old_ref, "min": old_min if old_min else price}
+            updates[key] = _pridej_meta(
+                {"ref": old_ref, "min": old_min if old_min else price},
+                title, card_text, link)
             return 0
-        updates[key] = {"ref": price, "min": old_min if old_min else price}
+        updates[key] = _pridej_meta(
+            {"ref": price, "min": old_min if old_min else price},
+            title, card_text, link)
         stats["zdrazeni"] = stats.get("zdrazeni", 0) + 1
         if notify:
             send_telegram(
@@ -788,10 +985,16 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
             )
         return 1
 
-    # Beze změny: minimum držíme.
+    # Beze změny: minimum držíme a záznam VŽDY "orazítkujeme" jako viděný
+    # v tomto běhu - i bez ceny. Bez toho by hlídání zmizelých nabídek
+    # falešně hlásilo zmizení u karet, které cenu zrovna neuvádějí.
     if price:
         new_min = min(price, old_min) if old_min else price
-        updates[key] = {"ref": price, "min": new_min}
+        updates[key] = _pridej_meta(
+            {"ref": price, "min": new_min}, title, card_text, link)
+    else:
+        updates[key] = _pridej_meta(
+            {"ref": old_ref, "min": old_min}, title, card_text, link)
     return 0
 
 
@@ -914,6 +1117,7 @@ def diagnostika_vypis(soup, zdroj):
 
 
 def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
+    global _karet_parsovano
     results = []
     for a in soup.find_all("a", href=True):
         href = a["href"]
@@ -943,6 +1147,7 @@ def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
         if len(card_text) < min_text_len:
             continue
         results.append((href, title, card_text))
+    _karet_parsovano += len(results)
     return results
 
 
@@ -983,6 +1188,7 @@ def check_invia(seen, updates, stats, notify, browser):
             if not offers:
                 # Stránka bez nabídek = konec výsledků, dál nelistujeme.
                 break
+            offers = doplnit_ceny_z_jsonld(soup, offers, "https://www.invia.cz")
             karet_celkem += len(offers)
             for href, title, card_text in offers:
                 found_celkem += process_offer(
@@ -1010,6 +1216,7 @@ def check_invia(seen, updates, stats, notify, browser):
         # skončila ve zprávě jako 🏨 název i v klíči nabídky.
         hotel_ze_slugu = _hotel_ze_slugu(url)
         offers = parse_offers_from_soup(soup, detail_pattern)
+        offers = doplnit_ceny_z_jsonld(soup, offers, "https://www.invia.cz")
         for href, title, card_text in offers:
             if hotel_ze_slugu:
                 title = hotel_ze_slugu
@@ -1031,6 +1238,7 @@ def check_bluestyle(seen, updates, stats, notify, browser):
         soup = BeautifulSoup(page_html, "html.parser")
         found = 0
         offers = parse_offers_from_soup(soup, detail_pattern)
+        offers = doplnit_ceny_z_jsonld(soup, offers, "https://www.blue-style.cz")
         for href, title, card_text in offers:
             found += process_offer("bluestyle", "Blue Style", "https://www.blue-style.cz",
                                    seen, updates, stats, notify, href, title, card_text,
@@ -1142,9 +1350,23 @@ def main():
             browser.close()
 
     today_str = now.date().isoformat()
+
+    # Hlídání zmizelých nabídek - MUSÍ běžet PŘED seen.update(updates),
+    # aby šlo rozlišit "viděno v tomto běhu" (updates) od "nepřišlo" (seen).
+    if not first_run:
+        hlidej_zmizele(seen, updates, today_str)
+
     seen.update(updates)
     seen = prune_seen(seen, updates, today_str)
     save_seen(seen)
+
+    # Denní digest: jednou denně v nastavenou hodinu TOP 5 za noc.
+    if (DENNI_DIGEST and not first_run
+            and now.hour == DIGEST_HODINA_UTC
+            and stats.get("digest_date") != today_str):
+        send_daily_digest(seen, today_str)
+        stats["digest_date"] = today_str
+
     save_stats(stats)
     if updates:
         print(f"Zpracováno {len(updates)} nových/aktualizovaných nabídek.")
