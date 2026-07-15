@@ -33,7 +33,7 @@ LETISTE_FILTR = ["Prah", "Brn", "Ostrav"]
 # Když web změní vzhled nebo se pokazí seen.json, bot by jinak mohl poslat
 # stovky zpráv (a při 4 s/zprávu i spálit minuty GitHub Actions). Zprávy
 # nad limit se jen zalogují a na konci přijde jedno upozornění s počtem.
-MAX_ZPRAV_ZA_BEH = 25
+MAX_ZPRAV_ZA_BEH = 100
 
 # Diagnostika: když je True, u Exim Tours a Fischer se do logu vypíše
 # ukázka skutečně nalezených odkazů na stránce. Slouží k jednorázovému
