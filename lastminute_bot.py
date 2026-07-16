@@ -157,6 +157,7 @@ DUVERYHODNE_EGYPT_URL = [
     "https://www.fischer.cz/vysledky-vyhledavani",
     "https://www.fischer.cz/last-minute/egypt",
     "https://www.blue-style.cz/vyhledavani/",
+    "https://www.cedok.cz/dovolena/egypt",
     "https://dovolenkovani.cz/vyhledavani-zajezdu",
 ]
 
@@ -260,6 +261,48 @@ BLUESTYLE_SEARCH_URLS = [
     "https://www.blue-style.cz/fulltext/?q=Hotel+jaz",
 ]
 
+# --- Čedok ---
+# Stránky letovisek s výpisem hotelů - vykreslené na SERVERU včetně cen
+# (ověřeno 07/2026), takže parsování je spolehlivé. Karta hotelu ukazuje
+# původní a aktuální cenu "/os." - bot sleduje tu aktuální. Filtr Jaz
+# hotely vybere podle slugu v odkazu (hotel-jaz-...).
+CEDOK_SEARCH_URLS = [
+    "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/",
+    "https://www.cedok.cz/dovolena/egypt/marsa-alam/",
+    "https://www.cedok.cz/dovolena/egypt/hurghada/",
+    "https://www.cedok.cz/dovolena/egypt/sharm-el-sheikh/",
+    "https://www.cedok.cz/dovolena/egypt/taba/",
+]
+
+# Přímé stránky Jaz hotelů na Čedoku - stejný princip jako INVIA_JAZ_HOTEL_URLS.
+# Stránka hotelu obsahuje (vykreslené na serveru!) aktuální cenu za osobu
+# a "Nejlepší možnost" s termínem a počtem nocí. Všechny URL OVĚŘENÉ 07/2026.
+# Další Jaz hotel objevíš v logu z výpisů letovisek výše a přidáš sem.
+CEDOK_JAZ_HOTEL_URLS = [
+    "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/hotel-jaz-almaza-beach-resort,MUH2JAB/",
+    "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/hotel-jaz-elite-crystal,MUH2CRY/",
+    "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/hotel-jaz-oriental-resort,MUH2JAO/",
+    "https://www.cedok.cz/dovolena/egypt/marsa-matruh/hotel-jaz-almazino,MUH2JAZ/",
+    "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/hotel-jaz-sakhra,MUH2SAK/",
+    "https://www.cedok.cz/dovolena/egypt/marsa-alam/hotel-jaz-riviera,RMF2RIV/",
+    "https://www.cedok.cz/dovolena/egypt/sharm-el-sheikh/jaz-belvedere-hotel,AEGSSH11PU/",
+]
+
+# Přímé stránky Jaz hotelů na Eximu (tvar /egypt/<region>/<oblast>/<slug>).
+# Termíny/ceny se dokreslují JavaScriptem - bot čte vyrenderovanou stránku
+# a cenu bere z textu nebo z JSON-LD. Všechny URL OVĚŘENÉ 07/2026.
+EXIM_JAZ_HOTEL_URLS = [
+    "https://www.eximtours.cz/egypt/marsa-matruh/almaza-bay/jaz-oriental",
+    "https://www.eximtours.cz/egypt/marsa-matruh/almaza-bay/jaz-sakhra",
+    "https://www.eximtours.cz/egypt/marsa-matruh/almaza-bay/jaz-tamerina",
+    "https://www.eximtours.cz/egypt/marsa-matruh/almaza-bay/jaz-almaza-blue",
+    "https://www.eximtours.cz/egypt/marsa-matruh/almaza-bay/jaz-neo-casa-maza",
+    "https://www.eximtours.cz/egypt/stredozemni-pobrezi/stredozemni-pobrezi/jaz-almaza-beach-resort",
+    "https://www.eximtours.cz/egypt/marsa-alam/marsa-alam/jaz-amara",
+    "https://www.eximtours.cz/egypt/marsa-alam/marsa-alam/jaz-samaya-resort",
+    "https://www.eximtours.cz/egypt/marsa-alam/el-quseir/jaz-grand-resort",
+]
+
 # --- Exim Tours a Fischer ---
 # VYPNUTO podle reálných logů (07/2026): Fischer vracel 0 karet na všech
 # URL (nejspíš blokace/jiná struktura) a Exim jen 1-8 karet bez jediného
@@ -272,6 +315,8 @@ EXIMTOURS_SEARCH_URLS = [
     # vypnout (nabídky Eximu stejně chodí přes Invii).
     "https://www.eximtours.cz/hledani-vysledky?q=Jaz",
     "https://www.eximtours.cz/last-minute/egypt",
+    # Stránka destinace Egypt - obsahuje výpis hotelů s odkazy na detaily:
+    "https://www.eximtours.cz/egypt",
     # "https://www.eximtours.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&m=5&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682|4308|4392|4309&tt=1",
 ]
 
@@ -416,6 +461,14 @@ def extract_price(text):
     if m:
         digits = re.sub(r"\s+", "", m.group(1))
         # Rozumné rozpětí ceny zájezdu na osobu (3 000 - 500 000 Kč).
+        if digits.isdigit() and 3000 <= int(digits) <= 500000:
+            return int(digits)
+    # Cena "za osobu" - Čedok píše "31 756 Kč 15 190 Kč /os." (přeškrtnutá
+    # původní + aktuální). Bereme číslo TĚSNĚ PŘED "/os." = aktuální cena;
+    # obecný fallback níže by vzal první číslo, tedy tu starou přeškrtnutou.
+    m = re.search(r"(?<!\d)(\d{1,3}(?:\s\d{3})+)\s*Kč\s*/\s*os", text)
+    if m:
+        digits = re.sub(r"\s+", "", m.group(1))
         if digits.isdigit() and 3000 <= int(digits) <= 500000:
             return int(digits)
     # Fallback pro weby, které "od" nepíšou (Blue Style: "13 dní 28 790 Kč").
@@ -1293,8 +1346,132 @@ def check_bluestyle(seen, updates, stats, notify, browser):
         print(f"Blue Style ({url}): {len(offers)} karet, {found} nových/zlevněných.")
 
 
+def _hotel_z_cesty(url):
+    """
+    Z URL hotelu vytáhne čitelné jméno (poslední segment cesty):
+    .../hotel-jaz-almaza-beach-resort,MUH2JAB/ -> "Jaz Almaza Beach Resort"
+    .../almaza-bay/jaz-oriental -> "Jaz Oriental"
+    """
+    cesta = url.split("?")[0].rstrip("/")
+    slug = cesta.rsplit("/", 1)[-1]
+    slug = slug.split(",")[0]                 # odříznout kód nabídky Čedoku
+    slug = re.sub(r"^hotel-", "", slug)       # odříznout prefix "hotel-"
+    return slug.replace("-", " ").strip().title()
+
+
+def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
+                                seen, updates, stats, notify, browser):
+    """
+    Přímé stránky hotelů (model jako Invia Jaz hotely): z každé stránky
+    se vytáhne hotel (ze slugu URL), termín "nejlepší nabídky", počet
+    nocí a cena za osobu, a založí se jedna nabídka na hotel. Cena se
+    hledá postupně: JSON-LD -> "od X Kč" -> dvojice přeškrtnutá+aktuální
+    (Čedok) -> "X Kč /os.". Bez nalezené ceny se nabídka nezakládá
+    (ať nechodí prázdné zprávy) - jen se to zapíše do logu.
+    """
+    for url in urls:
+        try:
+            page_html = fetch_rendered_html(browser, url)
+        except Exception as e:
+            print(f"{source_label} hotel chyba ({url}): {e}")
+            continue
+        soup = BeautifulSoup(page_html, "html.parser")
+        hotel = _hotel_z_cesty(url)
+        full_text = soup.get_text(" ", strip=True)
+        # Okno: začátek stránky PŘED blokem podobných hotelů - tam jsou
+        # ceny JINÝCH hotelů a nesmí se přimíchat.
+        okno = re.split(r"Podobné hotely|Doporučené hotely", full_text)[0][:8000]
+
+        # Termín + noci: Čedok píše "24.09 - 28.09.2026 (5 dní, 4 noci)".
+        term_txt, noci = "", None
+        m = re.search(r"(\d{1,2}\.\d{1,2})\.?\s*[-–]\s*(\d{1,2}\.\d{1,2}\.\d{4})"
+                      r"[^()]{0,20}\(\s*\d+\s*(?:dní|dny|den)\s*,\s*(\d+)\s*noc",
+                      okno)
+        if m:
+            term_txt = f"{m.group(1)}. – {m.group(2)}"
+            noci = int(m.group(3))
+        else:
+            term = extract_term(okno)
+            if term:
+                term_txt = format_term(term)
+                noci = (term[1] - term[0]).days
+
+        # Cena za osobu
+        cena = None
+        ld = extract_jsonld_prices(soup)
+        if ld:
+            cena = ld.get(url) or ld.get(url.rstrip("/"))
+            if cena is None and len(ld) == 1:
+                cena = next(iter(ld.values()))
+        if cena is None:
+            m = re.search(r"\bod\s*(\d{1,3}(?:\s\d{3})+)\s*Kč", okno)
+            if m:
+                cena = int(re.sub(r"\s+", "", m.group(1)))
+        if cena is None:
+            # Čedok hlavička: "35 247 Kč 20 047 Kč" (přeškrtnutá + aktuální)
+            m = re.search(r"(\d{1,3}(?:\s\d{3})+)\s*Kč\s*(\d{1,3}(?:\s\d{3})+)\s*Kč",
+                          okno)
+            if m:
+                cena = int(re.sub(r"\s+", "", m.group(2)))
+        if cena is None:
+            m = re.search(r"(?<!\d)(\d{1,3}(?:\s\d{3})+)\s*Kč\s*/\s*os", okno)
+            if m:
+                cena = int(re.sub(r"\s+", "", m.group(1)))
+        if cena is not None and not (3000 <= cena <= 500000):
+            cena = None
+        if cena is None:
+            print(f"{source_label} hotel ({url}): cena nenalezena, přeskakuji.")
+            continue
+
+        # Odletové letiště, když ho stránka uvádí ("Odlet: Praha")
+        odlet = ""
+        m = re.search(r"Odlet:\s*([A-ZÁ-Ž][a-zá-ž]+)", okno)
+        if m:
+            odlet = f" odlet z {m.group(1)}"
+
+        noci_txt = f" {noci} nocí" if noci else ""
+        card_text = f"{hotel} {term_txt}{noci_txt}{odlet} od {format_price(cena)}"
+        found = process_offer(source, source_label, base_url,
+                              seen, updates, stats, notify, url, hotel,
+                              card_text, trusted=True)
+        print(f"{source_label} hotel ({url}): 1 karta"
+              f" ({cena} Kč{noci_txt}), {found} nových/zlevněných.")
+
+
+def check_cedok(seen, updates, stats, notify, browser):
+    # Odkaz na hotel Čedoku obsahuje kód nabídky za čárkou:
+    # /dovolena/egypt/marsa-matrouh/hotel-jaz-almaza-beach-resort,MUH2JAB/
+    detail_pattern = re.compile(r"/dovolena/egypt/[^/?#]+/[^/?#,]+,[A-Za-z0-9]{4,}",
+                                re.IGNORECASE)
+    for url in CEDOK_SEARCH_URLS:
+        try:
+            page_html = fetch_rendered_html(browser, url)
+        except Exception as e:
+            print(f"Čedok chyba ({url}): {e}")
+            continue
+        soup = BeautifulSoup(page_html, "html.parser")
+        found = 0
+        offers = parse_offers_from_soup(soup, detail_pattern, min_text_len=10)
+        offers = doplnit_ceny_z_jsonld(soup, offers, "https://www.cedok.cz")
+        for href, title, card_text in offers:
+            found += process_offer("cedok", "Čedok", "https://www.cedok.cz",
+                                   seen, updates, stats, notify, href, title, card_text,
+                                   trusted=is_trusted_url(url))
+        print(f"Čedok ({url}): {len(offers)} karet, {found} nových/zlevněných.")
+
+    # 2) Přímé stránky Jaz hotelů - stejný model jako u Invie.
+    zkontroluj_hotelove_stranky("cedok", "Čedok (Jaz hotel)", "https://www.cedok.cz",
+                                CEDOK_JAZ_HOTEL_URLS,
+                                seen, updates, stats, notify, browser)
+
+
 def check_eximtours(seen, updates, stats, notify, browser):
-    detail_pattern = re.compile(r"/(zajezd|hotel)[-/]", re.IGNORECASE)
+    # Hotelové stránky Eximu mají tvar /egypt/<region>/<oblast>/<slug>
+    # (např. /egypt/marsa-matruh/almaza-bay/jaz-oriental) - v cestě NENÍ
+    # slovo "hotel" ani "zajezd", proto původní vzor nechytal nic.
+    # Chytáme odkazy s aspoň 3 segmenty za /egypt/ (příp. /hotely/egypt/).
+    detail_pattern = re.compile(
+        r"/(?:hotely/)?egypt/[^/?#]+/[^/?#]+/[^/?#]+/?(?:$|\?)", re.IGNORECASE)
     for url in EXIMTOURS_SEARCH_URLS:
         try:
             page_html = fetch_rendered_html(browser, url)
@@ -1311,9 +1488,17 @@ def check_eximtours(seen, updates, stats, notify, browser):
                                    trusted=is_trusted_url(url))
         print(f"Exim Tours ({url}): {len(offers)} karet, {found} nových/zlevněných.")
 
+    # 2) Přímé stránky Jaz hotelů - stejný model jako u Invie.
+    zkontroluj_hotelove_stranky("eximtours", "Exim Tours (Jaz hotel)",
+                                "https://www.eximtours.cz", EXIM_JAZ_HOTEL_URLS,
+                                seen, updates, stats, notify, browser)
+
 
 def check_fischer(seen, updates, stats, notify, browser):
-    detail_pattern = re.compile(r"/(zajezd|hotel)[-/]", re.IGNORECASE)
+    # Fischer jede na stejné platformě jako Exim (DER Touristik) -
+    # hotelové odkazy mají stejný tvar /egypt/<region>/<oblast>/<slug>.
+    detail_pattern = re.compile(
+        r"/(?:hotely/)?egypt/[^/?#]+/[^/?#]+/[^/?#]+/?(?:$|\?)", re.IGNORECASE)
     for url in FISCHER_SEARCH_URLS:
         try:
             page_html = fetch_rendered_html(browser, url)
@@ -1384,6 +1569,7 @@ def main():
             zdroje = [
                 ("Invia", check_invia),
                 ("Blue Style", check_bluestyle),
+                ("Čedok", check_cedok),
                 ("Exim Tours", check_eximtours),
                 ("Fischer", check_fischer),
                 ("Dovolenkovani", check_dovolenkovani),
