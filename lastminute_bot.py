@@ -267,15 +267,21 @@ BLUESTYLE_SEARCH_URLS = [
 # hotelových stránek Jaz), takže o nic nepřicházíš - jen se šetří ~1,5 min
 # za běh. Kdyby ses chtěl vrátit, odkomentuj URL níže.
 EXIMTOURS_SEARCH_URLS = [
-    # "https://www.eximtours.cz/hledani-vysledky?q=Jaz",
+    # ZNOVU ZAPNUTO (07/2026) na přání - sleduj v logu řádky "Exim Tours":
+    # když budou dlouhodobě "0 karet", web bota blokuje a má smysl je zase
+    # vypnout (nabídky Eximu stejně chodí přes Invii).
+    "https://www.eximtours.cz/hledani-vysledky?q=Jaz",
+    "https://www.eximtours.cz/last-minute/egypt",
     # "https://www.eximtours.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&m=5&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682|4308|4392|4309&tt=1",
-    # "https://www.eximtours.cz/last-minute/egypt",
 ]
 
 FISCHER_SEARCH_URLS = [
-    # "https://www.fischer.cz/hledani-vysledky?q=Jaz",
+    # ZNOVU ZAPNUTO (07/2026) na přání - sleduj v logu řádky "Fischer":
+    # dřív vracel 0 karet (blokace/jiná struktura webu). Když se to bude
+    # opakovat, zase zakomentuj (nabídky Fischeru chodí i přes Invii).
+    "https://www.fischer.cz/hledani-vysledky?q=Jaz",
+    "https://www.fischer.cz/last-minute/egypt",
     # "https://www.fischer.cz/vysledky-vyhledavani?ac1=2&d=64419|64420|64423&dd=2026-07-11&nn=1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21&rd=2026-09-10&to=4312|4305|2682&tt=1",
-    # "https://www.fischer.cz/last-minute/egypt",
 ]
 
 # --- Dovolenkovani.cz ---
@@ -556,7 +562,9 @@ def _vsechna_data(text):
     """Najde v textu všechna data a vrátí je jako seřazený seznam datetime.date."""
     nalezena = []
     # dd.mm.yyyy / dd.m.yyyy / dd. mm. yyyy
-    for m in re.finditer(r"\b(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\b", text):
+    # (?<!\d) místo \b: text bývá slepený ("St04. 11. 2026" - mezi "t" a "0"
+    # není hranice slova, takže \b by datum nenašlo).
+    for m in re.finditer(r"(?<!\d)(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\b", text):
         try:
             nalezena.append(datetime.date(int(m.group(3)), int(m.group(2)), int(m.group(1))))
         except ValueError:
@@ -570,7 +578,7 @@ def _vsechna_data(text):
     # dd.mm. bez roku (doplníme rok podle jiného nalezeného data nebo dneška)
     if len(nalezena) < 2:
         rok = nalezena[0].year if nalezena else datetime.date.today().year
-        for m in re.finditer(r"\b(\d{1,2})\.\s*(\d{1,2})\.(?!\s*\d{4})", text):
+        for m in re.finditer(r"(?<!\d)(\d{1,2})\.\s*(\d{1,2})\.(?!\s*\d{4})", text):
             try:
                 nalezena.append(datetime.date(rok, int(m.group(2)), int(m.group(1))))
             except ValueError:
@@ -611,10 +619,20 @@ def extract_nights(text):
     if term:
         return (term[1] - term[0]).days
 
-    m = re.search(r"\b(\d{1,2})\s*noc[íieí]*\b", text, re.IGNORECASE)
+    # (?<!\d) místo \b: weby často slepí text bez mezer ("Brno4 dny",
+    # "Praha7 nocí") a \b tam mezi písmenem a číslicí NENÍ - regex by selhal.
+    # Koncové \b nefunguje, když hned za slovem následuje číslice ceny
+    # ("4 dny19 190Kč") - mezi "y" a "1" hranice slova není. Proto lookahead
+    # na "nenásleduje písmeno".
+    _pis = "a-záčďéěíňóřšťúůýžA-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ"
+    m = re.search(rf"(?<!\d)(\d{{1,2}})\s*noc[íie]*(?![{_pis}])", text,
+                  re.IGNORECASE)
     if m:
         return int(m.group(1))
-    m = re.search(r"\b(\d{1,2})\s*(dn[íi]|dn[ůu]|dní)\b", text, re.IGNORECASE)
+    # Všechny české tvary: den, dny, dní, dnů, dnu, dni, dnech
+    # (původní vzor neuměl "4 dny" - nejčastější tvar u Blue Style!)
+    m = re.search(rf"(?<!\d)(\d{{1,2}})\s*(?:dnech|dny|dní|dnů|dnu|dni|den)(?![{_pis}])",
+                  text, re.IGNORECASE)
     if m:
         dni = int(m.group(1))
         return dni - 1 if dni > 1 else dni
@@ -1123,12 +1141,20 @@ def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
         href = a["href"]
         if not detail_pattern.search(href):
             continue
-        title = a.get_text(strip=True) or "Nabídka last minute"
+        # get_text S mezerou jako oddělovačem i u titulku - bez ní se text
+        # slepí ("St04. 11. 2026Brno4 dny") a regexy pak termín nenajdou.
+        title = a.get_text(" ", strip=True) or "Nabídka last minute"
 
-        # Text karty: nejbližší rodič často obsahuje jen název hotelu.
-        # Informace o termínu/letišti/ceně jsou ve větším nadřazeném bloku,
-        # proto lezeme po rodičích nahoru, dokud text nezačne obsahovat cenu
-        # (Kč) nebo datum, nebo dokud nedosáhneme rozumné velikosti.
+        # Text karty: nejbližší rodič často obsahuje jen název hotelu nebo
+        # JEN CENU (na hotelových stránkách Invie je anchor karty přímo
+        # "od 15 880 Kč"!). Proto NESTAČÍ zastavit u prvního rodiče s "Kč" -
+        # tak se k termínu/počtu nocí nikdy nedostaneme a zpráva by hlásila
+        # "délka pobytu neuvedena". Lezeme nahoru, dokud text neobsahuje
+        # TERMÍN (datum) nebo počet nocí/dní; cena samotná nestačí.
+        _ma_termin = re.compile(
+            r"\d{1,2}\.\s?\d{1,2}\.|\d{4}-\d{2}-\d{2}"      # datum
+            r"|\d{1,2}\s*noc|\d{1,2}\s*(?:dnech|dny|dní|dnů|dnu|dni|den)\b",
+            re.IGNORECASE)
         card_text = ""
         node = a
         for _ in range(6):  # max 6 úrovní nahoru
@@ -1137,13 +1163,20 @@ def parse_offers_from_soup(soup, detail_pattern, min_text_len=0):
                 break
             text = parent.get_text(" ", strip=True)
             node = parent
-            if ("Kč" in text) or re.search(r"\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}", text):
-                card_text = text[:400]
+            # Pojistka: rodič delší než ~1500 znaků už je skoro jistě
+            # kontejner s VÍCE kartami - dál nelezeme, jinak by se do
+            # card_text dostala data sousední nabídky. Necháme si poslední
+            # menší blok.
+            if card_text and len(text) > 1500:
                 break
-            card_text = text[:400]  # zapamatuj poslední (kdyby cena nikde nebyla)
+            card_text = text[:600]  # zapamatuj poslední nalezený blok
+            # Zastavíme, až když blok obsahuje termín/noci A cenu (typická
+            # kompletní karta). Samotná cena bez termínu nestačí.
+            if ("Kč" in text) and _ma_termin.search(text):
+                break
 
         if not card_text:
-            card_text = (a.get_text(" ", strip=True) or "")[:400]
+            card_text = (a.get_text(" ", strip=True) or "")[:600]
         if len(card_text) < min_text_len:
             continue
         results.append((href, title, card_text))
