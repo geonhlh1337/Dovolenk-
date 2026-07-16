@@ -412,12 +412,19 @@ def short_hash(text):
 
 def extract_price(text):
     # Bereme jen jasnou cenu ve tvaru "od X Kč" (spolehlivý údaj u zájezdů).
-    # Fallback na jakékoliv číslo + Kč je záměrně vynechán, protože u
-    # hotelových přehledových karet slepoval nesouvisející čísla (např. 40000).
     m = re.search(r"\bod\s*([\d\s]{3,9})\s*Kč", text)
     if m:
         digits = re.sub(r"\s+", "", m.group(1))
         # Rozumné rozpětí ceny zájezdu na osobu (3 000 - 500 000 Kč).
+        if digits.isdigit() and 3000 <= int(digits) <= 500000:
+            return int(digits)
+    # Fallback pro weby, které "od" nepíšou (Blue Style: "13 dní 28 790 Kč").
+    # Vyžadujeme ČÍSLO S ODDĚLENÝMI TISÍCI těsně před "Kč" - to nesplní
+    # slepence nesouvisejících čísel (obava původního kódu, např. "40294"),
+    # ale reálná cena "28 790 Kč" ano. Bereme první výskyt na kartě.
+    m = re.search(r"(?<!\d)(\d{1,3}(?:\s\d{3})+)\s*Kč", text)
+    if m:
+        digits = re.sub(r"\s+", "", m.group(1))
         if digits.isdigit() and 3000 <= int(digits) <= 500000:
             return int(digits)
     return None
