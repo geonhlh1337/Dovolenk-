@@ -440,7 +440,7 @@ def _pridej_meta(entry, title, card_text, link):
     t = (title or "").strip()
     if t:
         entry["t"] = t[:60]
-    n = extract_nights(card_text)
+    n = extract_nights(card_text, link)
     if n:
         entry["n"] = n
     if link:
@@ -448,18 +448,18 @@ def _pridej_meta(entry, title, card_text, link):
     return entry
 
 
-def _za_noc(price, card_text):
+def _za_noc(price, card_text, url=""):
     """
     Vrátí ' (2 268 Kč/noc)' - přepočet ceny na noc, když známe cenu i délku
     pobytu. Skvělé pro rychlé porovnání nabídek s různým počtem nocí.
     """
-    noci = extract_nights(card_text)
+    noci = extract_nights(card_text, url)
     if price and noci:
         return f" ({format_price(round(price / noci))}/noc)"
     return ""
 
 
-def zprava_detail(title, card_text, source_label):
+def zprava_detail(title, card_text, source_label, url=""):
     """
     Sestaví přehledné tělo zprávy: hotel, termín, noci, strava, odlet, popis.
     """
@@ -474,7 +474,7 @@ def zprava_detail(title, card_text, source_label):
 
     # Termín + počet nocí
     term = extract_term(card_text)
-    noci = extract_nights(card_text)
+    noci = extract_nights(card_text, url)
     if term:
         radky.append(f"📅 {format_term(term)}")
     if noci is not None:
@@ -607,14 +607,21 @@ def format_term(term):
     return f"{od.day}. {od.month}. – {do.day}. {do.month}. {do.year}"
 
 
-def extract_nights(text):
+def extract_nights(text, url=""):
     """
     Přečte počet nocí. Priorita:
-      1) ROZSAH DAT (nejspolehlivější) - spočítá noci z rozdílu datumů
+      0) URL parametr nl_nights= (Invia ho má v každém odkazu - NEJPŘESNĚJŠÍ,
+         nezávisí na tom, co je zrovna vidět v textu karty)
+      1) ROZSAH DAT - spočítá noci z rozdílu datumů
       2) 'X nocí'
       3) 'X dní/dnů' (Y dní = Y-1 nocí)
     Vrací int, nebo None když se délku nepodaří zjistit.
     """
+    if url:
+        m = re.search(r"[?&]nl_nights=(\d{1,2})\b", url)
+        if m:
+            return int(m.group(1))
+
     term = extract_term(text)
     if term:
         return (term[1] - term[0]).days
@@ -639,7 +646,7 @@ def extract_nights(text):
     return None
 
 
-def passes_min_nights(text):
+def passes_min_nights(text, url=""):
     """
     Zahodí jen nabídky, u kterých PROKAZATELNĚ víme, že jsou kratší než
     MIN_NOCI. Když délku nejde zjistit, nabídku PUSTÍME (a ve zprávě ji
@@ -647,7 +654,7 @@ def passes_min_nights(text):
     """
     if MIN_NOCI is None:
         return True
-    nights = extract_nights(text)
+    nights = extract_nights(text, url)
     if nights is None:
         return True  # neznámá délka -> raději pošli, ať nic neunikne
     return nights >= MIN_NOCI
@@ -915,7 +922,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         return 0
     if not passes_meal_filter(card_text):
         return 0
-    if not passes_min_nights(card_text):
+    if not passes_min_nights(card_text, href):
         return 0
 
     price = extract_price(card_text)
@@ -934,12 +941,12 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         if notify:
             if price:
                 cena_radek = (f"\n💰 <b>{format_price(price)}</b>"
-                              f"{_za_noc(price, card_text)}")
+                              f"{_za_noc(price, card_text, link)}")
             else:
                 cena_radek = "\n💰 <i>cena neuvedena</i>"
             send_telegram(
                 f"🆕 <b>NOVÁ NABÍDKA</b> · {source_label}\n"
-                f"{zprava_detail(title, card_text, source_label)}"
+                f"{zprava_detail(title, card_text, source_label, link)}"
                 f"{cena_radek}",
                 link=link,
             )
@@ -973,9 +980,9 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
                          if old_min and not is_record else "")
             send_telegram(
                 f"🔻🟥 <b>ZLEVNĚNÍ o {format_price(sleva)}</b> · {source_label}{badge}\n"
-                f"{zprava_detail(title, card_text, source_label)}\n"
+                f"{zprava_detail(title, card_text, source_label, link)}\n"
                 f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>"
-                f"{_za_noc(price, card_text)}{min_radek}",
+                f"{_za_noc(price, card_text, link)}{min_radek}",
                 link=link,
             )
         return 1
@@ -996,9 +1003,9 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         if notify:
             send_telegram(
                 f"🔺🟩 <b>ZDRAŽENÍ o {format_price(zdrazeni)}</b> · {source_label}\n"
-                f"{zprava_detail(title, card_text, source_label)}\n"
+                f"{zprava_detail(title, card_text, source_label, link)}\n"
                 f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>"
-                f"{_za_noc(price, card_text)}",
+                f"{_za_noc(price, card_text, link)}",
                 link=link,
             )
         return 1
