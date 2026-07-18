@@ -59,6 +59,13 @@
 "t": "Hotel Jaz Elite Casa Del Mar Beach",
 "u": "https://www.blue-style.cz/egypt/hurghada/hotel-jaz-elite-casa-del-mar-beach/?date=2026-08-06&duration=2&depCity=2&arrCity=9&airline=Hello Jets"
 },
+"bluestyle:2910fd608e": {
+"d": "2026-07-18",
+"min": 0,
+"ref": 0,
+"t": "Nabídka last minute",
+"u": "https://www.blue-style.cz/egypt/marsa-alam/hotel-jaz-neo-dar-el-madina/?date=2026-09-02&duration=2&depCity=10&arrCity=12&airline=Hello Jets"
+},
 "bluestyle:2922d94e15": {
 "d": "2026-07-16",
 "gone": true,
@@ -101,6 +108,13 @@
 "ref": 16290,
 "t": "Hotel Jaz Elite Maraya",
 "u": "https://www.blue-style.cz/egypt/marsa-alam/hotel-jaz-elite-maraya/?date=2026-08-16&duration=2&depCity=2&arrCity=12&airline=Hello Jets"
+},
+"bluestyle:399d13c89c": {
+"d": "2026-07-18",
+"min": 0,
+"ref": 0,
+"t": "Nabídka last minute",
+"u": "https://www.blue-style.cz/egypt/hurghada/hotel-jaz-elite-asteria/?date=2026-08-02&duration=2&depCity=2&arrCity=9&airline=Hello Jets"
 },
 "bluestyle:3b1dfe517c": {
 "d": "2026-07-16",
@@ -220,6 +234,13 @@
 "ref": 12490,
 "t": "Hotel Jaz Grand Marsa",
 "u": "https://www.blue-style.cz/egypt/marsa-alam/hotel-jaz-grand-marsa/?date=2026-07-18&duration=2&depCity=11&arrCity=12&airline=Hello Jets"
+},
+"bluestyle:56809a8711": {
+"d": "2026-07-18",
+"min": 0,
+"ref": 0,
+"t": "Nabídka last minute",
+"u": "https://www.blue-style.cz/egypt/hurghada/hotel-jaz-makadi-oasis-resort/?date=2026-08-12&duration=2&depCity=2&arrCity=9&airline=Hello Jets"
 },
 "bluestyle:5ac18492d5": {
 "d": "2026-07-16",
@@ -352,6 +373,13 @@
 "t": "St22. 07. 2026Praha4 dny17 290KčAll Inclusivelm",
 "u": "https://www.blue-style.cz/egypt/marsa-alam/hotel-jaz-elite-maraya/?date=2026-07-22&duration=3&depCity=2&arrCity=12&airline=Hello Jets&room1=2|SUPRGV|AI"
 },
+"bluestyle:9cad50c745": {
+"d": "2026-07-18",
+"min": 0,
+"ref": 0,
+"t": "Nabídka last minute",
+"u": "https://www.blue-style.cz/egypt/hurghada/hotel-jaz-palmariva-beach-ex-labranda-club/?date=2026-08-02&duration=2&depCity=2&arrCity=9&airline=Hello Jets"
+},
 "bluestyle:9f3a38d2d8": {
 "d": "2026-07-15",
 "gone": true,
@@ -360,6 +388,13 @@
 "ref": 0,
 "t": "So18. 07. 2026Praha3 dny14 090KčAll Inclusivelm",
 "u": "https://www.blue-style.cz/egypt/hurghada/hotel-jaz-aquamarine-resort/?date=2026-07-18&duration=2&depCity=2&arrCity=9&airline=Hello Jets&room1=2|SUPRPV|AI"
+},
+"bluestyle:9f8d01dcac": {
+"d": "2026-07-18",
+"min": 0,
+"ref": 0,
+"t": "Nabídka last minute",
+"u": "https://www.blue-style.cz/egypt/hurghada/hotel-jaz-casa-del-mar-resort-ex-iberotel-casa-del-mar/?date=2026-08-03&duration=2&depCity=2&arrCity=9&airline=Hello Jets"
 },
 "bluestyle:abb4f7cb87": {
 "d": "2026-07-16",
@@ -460,6 +495,7 @@
 "bluestyle:e5d7c39989": {
 "d": "2026-07-18",
 "min": 33990,
+"miss": 1,
 "n": 14,
 "ref": 33990,
 "t": "Pá 24. 07. 2026 Brno 15 dní 33 990 Kč All Inclusive lm",
@@ -523,6 +559,38 @@
 "ref": 0,
 "t": "Nabídka last minute",
 "u": "https://www.blue-style.cz/egypt/marsa-alam/hotel-jaz-elite-maraya/?date=2026-08-16&duration=2&depCity=2&arrCity=12&airline=Hello Jets"
+},
+"cedok:245500707c": {
+"d": "2026-07-18",
+"min": 22690,
+"n": 7,
+"ref": 22690,
+"t": "Jaz Elite Crystal",
+"u": "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/hotel-jaz-elite-crystal,MUH2CRY/"
+},
+"cedok:63fbcc5db0": {
+"d": "2026-07-18",
+"min": 36890,
+"n": 7,
+"ref": 36890,
+"t": "Jaz Sakhra",
+"u": "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/hotel-jaz-sakhra,MUH2SAK/"
+},
+"cedok:8674598ac5": {
+"d": "2026-07-18",
+"min": 21329,
+"n": 7,
+"ref": 21329,
+"t": "Jaz Oriental Resort",
+"u": "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/hotel-jaz-oriental-resort,MUH2JAO/"
+},
+"cedok:fee9b27040": {
+"d": "2026-07-18",
+"min": 15999,
+"n": 15,
+"ref": 15999,
+"t": "Jaz Almazino",
+"u": "https://www.cedok.cz/dovolena/egypt/marsa-matruh/hotel-jaz-almazino,MUH2JAZ/"
 },
 "eximtours:0327bb3f72": {
 "d": "2026-07-18",
@@ -656,7 +724,6 @@
 "eximtours:261007a479": {
 "d": "2026-07-18",
 "min": 0,
-"miss": 1,
 "n": 7,
 "ref": 0,
 "t": "Jaz Makadi Star Resort And Spa",
@@ -743,6 +810,7 @@
 "eximtours:5f24243c78": {
 "d": "2026-07-18",
 "min": 0,
+"miss": 1,
 "n": 7,
 "ref": 0,
 "t": "Jaz Palmariva Beach Resort",
@@ -978,7 +1046,6 @@
 "eximtours:c5214f0896": {
 "d": "2026-07-18",
 "min": 0,
-"miss": 1,
 "n": 7,
 "ref": 0,
 "t": "Jaz Palmariva Beach Resort",
@@ -987,6 +1054,7 @@
 "eximtours:ca07540932": {
 "d": "2026-07-18",
 "min": 0,
+"miss": 1,
 "n": 7,
 "ref": 0,
 "t": "Jaz Palmariva Beach Ex. Labranda Club Makadi",
@@ -1097,8 +1165,9 @@
 },
 "fischer:d61c3c6d07": {
 "d": "2026-07-17",
+"gone": true,
 "min": 15840,
-"miss": 2,
+"miss": 3,
 "ref": 15840,
 "t": "Jaz Viva Casa Maza Egypt / Marsa Matruh – El Alamein / Almaz",
 "u": "https://www.fischer.cz/egypt/marsa-matruh/almaza-bay/jaz-neo-casa-maza?DS=256&GIATA=0&D=64423&HID=248323&NNM=0%7C1%7C2%7C3%7C4%7C5%7C6%7C7%7C8%7C9%7C10%7C11%7C12%7C13%7C14%7C15%7C16%7C17%7C18%7C19%7C20%7C21%7C22%7C23%7C24%7C25%7C26&DFX=2026-09-28%7C2026-10-26&RD=2026-10-15&DD=2026-10-12&ERM=0&AC1=2&KC1=0&IC1=0&TT=0&PID=MUH90028&DPR=FISCHER+ATCOM"
@@ -1132,8 +1201,9 @@
 },
 "invia:0a5ad0aaa8": {
 "d": "2026-07-17",
+"gone": true,
 "min": 16275,
-"miss": 2,
+"miss": 3,
 "n": 7,
 "ref": 16275,
 "t": "Jaz Mirabel Beach Resort",
@@ -1343,8 +1413,9 @@
 },
 "invia:b3595d60b1": {
 "d": "2026-07-17",
+"gone": true,
 "min": 22301,
-"miss": 2,
+"miss": 3,
 "n": 7,
 "ref": 22301,
 "t": "Jaz Fanara Resort",
@@ -1480,8 +1551,9 @@
 },
 "invia:efbbba90b3": {
 "d": "2026-07-17",
+"gone": true,
 "min": 20539,
-"miss": 2,
+"miss": 3,
 "n": 7,
 "ref": 20539,
 "t": "Jaz Almaza Beach Resort",
