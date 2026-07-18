@@ -266,12 +266,14 @@ BLUESTYLE_SEARCH_URLS = [
 # (ověřeno 07/2026), takže parsování je spolehlivé. Karta hotelu ukazuje
 # původní a aktuální cenu "/os." - bot sleduje tu aktuální. Filtr Jaz
 # hotely vybere podle slugu v odkazu (hotel-jaz-...).
+# POZOR: výpisy bydlí na /vysledky-vyhledavani/dovolena/<destinace>/
+# (ověřeno 07/2026) - dřívější /dovolena/egypt/<letovisko>/ vrací 404.
 CEDOK_SEARCH_URLS = [
-    "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/",
-    "https://www.cedok.cz/dovolena/egypt/marsa-alam/",
-    "https://www.cedok.cz/dovolena/egypt/hurghada/",
-    "https://www.cedok.cz/dovolena/egypt/sharm-el-sheikh/",
-    "https://www.cedok.cz/dovolena/egypt/taba/",
+    "https://www.cedok.cz/vysledky-vyhledavani/dovolena/egypt/",
+    "https://www.cedok.cz/vysledky-vyhledavani/dovolena/marsa-matrouh/",
+    "https://www.cedok.cz/vysledky-vyhledavani/dovolena/marsa-alam/",
+    "https://www.cedok.cz/vysledky-vyhledavani/dovolena/hurghada/",
+    "https://www.cedok.cz/vysledky-vyhledavani/dovolena/sharm-el-sheikh/",
 ]
 
 # Přímé stránky Jaz hotelů na Čedoku - stejný princip jako INVIA_JAZ_HOTEL_URLS.
@@ -1393,7 +1395,9 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
         full_text = soup.get_text(" ", strip=True)
         # Okno: začátek stránky PŘED blokem podobných hotelů - tam jsou
         # ceny JINÝCH hotelů a nesmí se přimíchat.
-        okno = re.split(r"Podobné hotely|Doporučené hotely", full_text)[0][:8000]
+        # Bez pevného limitu délky: ceny (hlavně u Eximu) bývají v textu
+        # až daleko za popisem hotelu - jen odřízneme blok podobných hotelů.
+        okno = re.split(r"Podobné hotely|Doporučené hotely", full_text)[0]
 
         # Termín + noci: Čedok píše "24.09 - 28.09.2026 (5 dní, 4 noci)".
         term_txt, noci = "", None
@@ -1467,7 +1471,26 @@ def fetch_cedok_html(browser, url):
          HTTP stažení (stránky Čedoku jsou vykreslené na serveru, takže
          obsah je i bez JavaScriptu).
     Vrací HTML; když všechno selže, vrátí to nejlepší, co má.
+
+    Z běhů 07/2026 víme, že prohlížeč na Čedoku narazí na ochrannou stránku
+    VŽDY, zatímco přímé HTTP stažení funguje spolehlivě (obsah je vykreslený
+    na serveru). Proto jdeme rovnou na přímé stažení a prohlížeč necháváme
+    jen jako zálohu, kdyby Čedok někdy začal vyžadovat JavaScript.
     """
+    try:
+        r = requests.get(url, timeout=30, headers={
+            "User-Agent": _USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.7",
+            "Referer": "https://www.cedok.cz/",
+        })
+        if r.ok and "Kč" in r.text and len(r.text) > 20000:
+            return r.text
+        print(f"  Čedok: přímé stažení nestačí (HTTP {r.status_code}, "
+              f"{len(r.text)} znaků), zkouším prohlížeč.")
+    except Exception as e:
+        print(f"  Čedok: přímé stažení selhalo ({e}), zkouším prohlížeč.")
+
     html = ""
     ctx = None
     try:
