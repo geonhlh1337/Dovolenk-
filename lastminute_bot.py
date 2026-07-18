@@ -457,27 +457,27 @@ def short_hash(text):
 
 def extract_price(text):
     # Bereme jen jasnou cenu ve tvaru "od X Kč" (spolehlivý údaj u zájezdů).
-    m = re.search(r"\bod\s*([\d\s]{3,9})\s*Kč", text)
+    m = re.search(r"\bod\s*([\d\s.]{3,9})\s*Kč", text)
     if m:
-        digits = re.sub(r"\s+", "", m.group(1))
+        digits = re.sub(r"[\s.]+", "", m.group(1))
         # Rozumné rozpětí ceny zájezdu na osobu (3 000 - 500 000 Kč).
         if digits.isdigit() and 3000 <= int(digits) <= 500000:
             return int(digits)
     # Cena "za osobu" - Čedok píše "31 756 Kč 15 190 Kč /os." (přeškrtnutá
     # původní + aktuální). Bereme číslo TĚSNĚ PŘED "/os." = aktuální cena;
     # obecný fallback níže by vzal první číslo, tedy tu starou přeškrtnutou.
-    m = re.search(r"(?<!\d)(\d{1,3}(?:\s\d{3})+)\s*Kč\s*/\s*os", text)
+    m = re.search(r"(?<!\d)(\d{1,3}(?:[\s.]\d{3})+)\s*Kč\s*/\s*os", text)
     if m:
-        digits = re.sub(r"\s+", "", m.group(1))
+        digits = re.sub(r"[\s.]+", "", m.group(1))
         if digits.isdigit() and 3000 <= int(digits) <= 500000:
             return int(digits)
     # Fallback pro weby, které "od" nepíšou (Blue Style: "13 dní 28 790 Kč").
     # Vyžadujeme ČÍSLO S ODDĚLENÝMI TISÍCI těsně před "Kč" - to nesplní
     # slepence nesouvisejících čísel (obava původního kódu, např. "40294"),
     # ale reálná cena "28 790 Kč" ano. Bereme první výskyt na kartě.
-    m = re.search(r"(?<!\d)(\d{1,3}(?:\s\d{3})+)\s*Kč", text)
+    m = re.search(r"(?<!\d)(\d{1,3}(?:[\s.]\d{3})+)\s*Kč", text)
     if m:
-        digits = re.sub(r"\s+", "", m.group(1))
+        digits = re.sub(r"[\s.]+", "", m.group(1))
         if digits.isdigit() and 3000 <= int(digits) <= 500000:
             return int(digits)
     return None
@@ -1140,6 +1140,16 @@ def fetch_rendered_html(browser, url):
             page.wait_for_timeout(1000)
         except Exception:
             pass  # žádný dialog - jedeme dál
+        # Odrolovat stránku dolů: karty pod ohybem obrazovky se na řadě
+        # webů (Exim, Fischer) donačítají líně až při scrollu - bez tohohle
+        # mají spodní karty prázdné ceny ("Načítám...").
+        try:
+            for _ in range(6):
+                page.evaluate("window.scrollBy(0, window.innerHeight * 2)")
+                page.wait_for_timeout(400)
+            page.evaluate("window.scrollTo(0, 0)")
+        except Exception:
+            pass
         page.wait_for_timeout(2000)
         html = None
         last_error = None
@@ -1360,7 +1370,10 @@ def _hotel_z_cesty(url):
 
 
 def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
-                                seen, updates, stats, notify, browser):
+                                seen, updates, stats, notify, browser,
+                                fetcher=None):
+    if fetcher is None:
+        fetcher = fetch_rendered_html
     """
     Přímé stránky hotelů (model jako Invia Jaz hotely): z každé stránky
     se vytáhne hotel (ze slugu URL), termín "nejlepší nabídky", počet
@@ -1371,7 +1384,7 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
     """
     for url in urls:
         try:
-            page_html = fetch_rendered_html(browser, url)
+            page_html = fetcher(browser, url)
         except Exception as e:
             print(f"{source_label} hotel chyba ({url}): {e}")
             continue
@@ -1404,23 +1417,26 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
             if cena is None and len(ld) == 1:
                 cena = next(iter(ld.values()))
         if cena is None:
-            m = re.search(r"\bod\s*(\d{1,3}(?:\s\d{3})+)\s*Kč", okno)
+            m = re.search(r"\bod\s*(\d{1,3}(?:[\s.]\d{3})+)\s*Kč", okno)
             if m:
-                cena = int(re.sub(r"\s+", "", m.group(1)))
+                cena = int(re.sub(r"[\s.]+", "", m.group(1)))
         if cena is None:
             # Čedok hlavička: "35 247 Kč 20 047 Kč" (přeškrtnutá + aktuální)
-            m = re.search(r"(\d{1,3}(?:\s\d{3})+)\s*Kč\s*(\d{1,3}(?:\s\d{3})+)\s*Kč",
+            m = re.search(r"(\d{1,3}(?:[\s.]\d{3})+)\s*Kč\s*(\d{1,3}(?:[\s.]\d{3})+)\s*Kč",
                           okno)
             if m:
-                cena = int(re.sub(r"\s+", "", m.group(2)))
+                cena = int(re.sub(r"[\s.]+", "", m.group(2)))
         if cena is None:
-            m = re.search(r"(?<!\d)(\d{1,3}(?:\s\d{3})+)\s*Kč\s*/\s*os", okno)
+            m = re.search(r"(?<!\d)(\d{1,3}(?:[\s.]\d{3})+)\s*Kč\s*/\s*os", okno)
             if m:
-                cena = int(re.sub(r"\s+", "", m.group(1)))
+                cena = int(re.sub(r"[\s.]+", "", m.group(1)))
         if cena is not None and not (3000 <= cena <= 500000):
             cena = None
         if cena is None:
             print(f"{source_label} hotel ({url}): cena nenalezena, přeskakuji.")
+            print(f"  [DIAG] text: {len(full_text)} znaků, "
+                  f"'Kč' na stránce: {full_text.count('Kč')}x, "
+                  f"JSON-LD cen: {len(ld)}, začátek: {okno[:160]!r}")
             continue
 
         # Odletové letiště, když ho stránka uvádí ("Odlet: Praha")
@@ -1438,6 +1454,90 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
               f" ({cena} Kč{noci_txt}), {found} nových/zlevněných.")
 
 
+def fetch_cedok_html(browser, url):
+    """
+    Čedok má citlivější ochranu proti botům než ostatní weby, proto pro něj
+    máme opatrnější načítání:
+      1. Playwright s maskováním headless znaků (navigator.webdriver, jazyk,
+         časové pásmo) a BEZ blokování požadavků - ochrany si všímají, když
+         stránka neodesílá obrázky/skripty.
+      2. Čeká se přímo na výskyt ceny ("Kč") - ochranná mezistránka se často
+         po pár sekundách sama přesměruje na obsah.
+      3. Když prohlížeč dostane prázdnou/ochrannou stránku, zkusí se obyčejné
+         HTTP stažení (stránky Čedoku jsou vykreslené na serveru, takže
+         obsah je i bez JavaScriptu).
+    Vrací HTML; když všechno selže, vrátí to nejlepší, co má.
+    """
+    html = ""
+    ctx = None
+    try:
+        ctx = browser.new_context(
+            user_agent=_USER_AGENT,
+            locale="cs-CZ",
+            timezone_id="Europe/Prague",
+            viewport={"width": 1366, "height": 900},
+            extra_http_headers={"Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.7"},
+        )
+        # Skrýt nejčastější znaky automatizace, podle kterých ochrany poznají
+        # headless Chromium.
+        ctx.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+            "Object.defineProperty(navigator, 'languages', {get: () => ['cs-CZ','cs','en']});"
+            "Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3]});"
+        )
+        page = ctx.new_page()
+        page.goto(url, timeout=45000, wait_until="domcontentloaded")
+        # Ochranná mezistránka se typicky do pár sekund přesměruje - čekáme
+        # rovnou na cenu, ta na obsahové stránce Čedoku je vždy.
+        try:
+            page.wait_for_selector("text=Kč", timeout=15000)
+        except Exception:
+            pass
+        try:
+            for _ in range(4):
+                page.evaluate("window.scrollBy(0, window.innerHeight * 2)")
+                page.wait_for_timeout(350)
+        except Exception:
+            pass
+        page.wait_for_timeout(1500)
+        html = page.content()
+    except Exception as e:
+        print(f"  Čedok: prohlížeč selhal ({e}), zkouším přímé stažení.")
+    finally:
+        if ctx is not None:
+            try:
+                ctx.close()
+            except Exception:
+                pass
+
+    text_ok = "Kč" in html and len(html) > 20000
+    ochrana = any(z in html for z in (
+        "Just a moment", "Access denied", "Attention Required",
+        "captcha", "Ověřujeme", "cf-challenge"))
+    if text_ok and not ochrana:
+        return html
+    if ochrana:
+        print("  Čedok: prohlížeč narazil na ochrannou stránku, "
+              "zkouším přímé stažení bez prohlížeče.")
+
+    # Fallback: obyčejné HTTP - obsah Čedoku je vykreslený na serveru.
+    try:
+        r = requests.get(url, timeout=30, headers={
+            "User-Agent": _USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.7",
+            "Referer": "https://www.cedok.cz/",
+        })
+        if r.ok and "Kč" in r.text:
+            print(f"  Čedok: přímé stažení uspělo ({len(r.text)} znaků).")
+            return r.text
+        print(f"  Čedok: přímé stažení nepomohlo (HTTP {r.status_code}, "
+              f"'Kč' v odpovědi: {'Kč' in r.text}).")
+    except Exception as e:
+        print(f"  Čedok: přímé stažení selhalo ({e}).")
+    return html
+
+
 def check_cedok(seen, updates, stats, notify, browser):
     # Odkaz na hotel Čedoku obsahuje kód nabídky za čárkou:
     # /dovolena/egypt/marsa-matrouh/hotel-jaz-almaza-beach-resort,MUH2JAB/
@@ -1445,7 +1545,7 @@ def check_cedok(seen, updates, stats, notify, browser):
                                 re.IGNORECASE)
     for url in CEDOK_SEARCH_URLS:
         try:
-            page_html = fetch_rendered_html(browser, url)
+            page_html = fetch_cedok_html(browser, url)
         except Exception as e:
             print(f"Čedok chyba ({url}): {e}")
             continue
@@ -1458,11 +1558,20 @@ def check_cedok(seen, updates, stats, notify, browser):
                                    seen, updates, stats, notify, href, title, card_text,
                                    trusted=is_trusted_url(url))
         print(f"Čedok ({url}): {len(offers)} karet, {found} nových/zlevněných.")
+        if not offers:
+            hrefs = [a.get("href", "") for a in soup.find_all("a", href=True)]
+            vzorek = [h for h in hrefs if "/dovolena/" in h][:8]
+            txt = soup.get_text(" ", strip=True)
+            print(f"  [DIAG Čedok] HTML odkazů: {len(hrefs)}, text: {len(txt)} znaků, "
+                  f"'Kč': {txt.count('Kč')}x, začátek: {txt[:120]!r}")
+            for h in vzorek:
+                print(f"  [DIAG Čedok] odkaz: {h[:130]}")
 
     # 2) Přímé stránky Jaz hotelů - stejný model jako u Invie.
     zkontroluj_hotelove_stranky("cedok", "Čedok (Jaz hotel)", "https://www.cedok.cz",
                                 CEDOK_JAZ_HOTEL_URLS,
-                                seen, updates, stats, notify, browser)
+                                seen, updates, stats, notify, browser,
+                                fetcher=fetch_cedok_html)
 
 
 def check_eximtours(seen, updates, stats, notify, browser):
