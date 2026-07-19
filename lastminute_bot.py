@@ -1451,6 +1451,30 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
             m = re.search(r"(?<!\d)(\d{1,3}(?:[\s.]\d{3})+)\s*Kč\s*/\s*os", okno)
             if m:
                 cena = int(re.sub(r"[\s.]+", "", m.group(1)))
+        if cena is None:
+            # POSLEDNÍ ZÁCHRANA (Exim): ceny bez oddělených tisíců
+            # ("22990 Kč") žádný z předchozích vzorů nechytí - záměrně,
+            # aby se na kartách neslepovala nesouvisející čísla. Tady ale
+            # čteme stránku JEDNOHO hotelu a text spojujeme mezerou, takže
+            # slepence nehrozí. Bereme všechna čísla 4-6 cifer před "Kč"
+            # v rozumném rozpětí a jen když jich je aspoň 3 (= ceník
+            # termínů, ne osamocený příplatek) - z nich NEJNIŽŠÍ, což
+            # z nich pak NEJNIŽŠÍ CENA ZÁJEZDU. Pozor: v ceníku bývají
+            # i levné PŘÍPLATKY (jednolůžko, taxy) - odfiltrujeme je
+            # mediánem: skutečné ceny zájezdů se drží pohromadě, příplatky
+            # jsou výrazně pod nimi. Navíc tvrdé dno 8 000 Kč (letecký
+            # zájezd do Egypta levněji reálně neexistuje).
+            kandidati = [int(c) for c in re.findall(r"(?<!\d)(\d{4,6})\s*Kč", okno)
+                         if 3000 <= int(c) <= 500000]
+            if len(kandidati) >= 3:
+                srt = sorted(kandidati)
+                median = srt[len(srt) // 2]
+                zajezdy = [c for c in kandidati
+                           if c >= max(8000, median * 0.5)]
+                # Aspoň 3 ceny NAD prahem = skutečný ceník termínů;
+                # méně = nejspíš jen příplatky, nabídku nezakládat.
+                if len(zajezdy) >= 3:
+                    cena = min(zajezdy)
         if cena is not None and not (3000 <= cena <= 500000):
             cena = None
         if cena is None:
