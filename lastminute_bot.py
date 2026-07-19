@@ -512,12 +512,12 @@ def _pridej_meta(entry, title, card_text, link):
 
 def _za_noc(price, card_text, url=""):
     """
-    Vrátí ' (2 268 Kč/noc)' - přepočet ceny na noc, když známe cenu i délku
+    Vrátí ' · 2 268 Kč/noc' - přepočet ceny na noc, když známe cenu i délku
     pobytu. Skvělé pro rychlé porovnání nabídek s různým počtem nocí.
     """
     noci = extract_nights(card_text, url)
     if price and noci:
-        return f" ({format_price(round(price / noci))}/noc)"
+        return f" · {format_price(round(price / noci))}/noc"
     return ""
 
 
@@ -534,28 +534,33 @@ def zprava_detail(title, card_text, source_label, url=""):
     # by Telegram (parse_mode=HTML) zprávu odmítl a vůbec by nedorazila.
     radky.append(f"🏨 <b>{html.escape(hotel)}</b>")
 
-    # Termín + počet nocí
+    # Termín · počet nocí na JEDNOM řádku - kompaktnější a přehlednější
     term = extract_term(card_text)
     noci = extract_nights(card_text, url)
+    radek_termin = []
     if term:
-        radky.append(f"📅 {format_term(term)}")
+        radek_termin.append(f"📅 {format_term(term)}")
     if noci is not None:
-        radky.append(f"🌙 <b>{noci} nocí</b>")
-    else:
-        radky.append("🌙 ⚠️ <i>délka pobytu neuvedena – zkontroluj v odkazu</i>")
+        radek_termin.append(f"🌙 <b>{noci} nocí</b>")
+    if radek_termin:
+        radky.append(" · ".join(radek_termin))
+    if noci is None:
+        radky.append("⚠️ <i>délka pobytu neuvedena – zkontroluj v odkazu</i>")
 
-    # Strava (když ji karta uvádí) - helper zkouší delší názvy dřív,
-    # takže "Ultra all inclusive" se správně rozliší od "All inclusive".
+    # Strava · odlet na JEDNOM řádku (jen ty údaje, které karta uvádí).
+    # Helper stravy zkouší delší názvy dřív, takže "Ultra all inclusive"
+    # se správně rozliší od "All inclusive"; letiště hledáme kmenem,
+    # aby se chytly i skloňované tvary ("z Prahy", "odlet z Brna").
+    radek_info = []
     strava = _strava_z_textu(card_text)
     if strava:
-        radky.append(f"🍽 {strava}")
-
-    # Odletové letiště (když ho karta uvádí) - hledáme kmenem, aby se
-    # chytly i skloňované tvary ("z Prahy", "odlet z Brna").
+        radek_info.append(f"🍽 {strava}")
     for kmen, nazev in [("prah", "Praha"), ("brn", "Brno"), ("ostrav", "Ostrava")]:
         if kmen in card_text.lower():
-            radky.append(f"✈️ Odlet: {nazev}")
+            radek_info.append(f"✈️ {nazev}")
             break
+    if radek_info:
+        radky.append(" · ".join(radek_info))
 
     return "\n".join(radky)
 
@@ -797,18 +802,20 @@ def stats_note_discount(stats, sleva, price, title):
 
 
 def send_weekly_summary(stats):
-    lines = ["📊 <b>Týdenní přehled last minute bota</b>"]
-    lines.append(f"🆕 Nových nabídek: {stats['novych']}")
-    lines.append(f"🔻 Zaznamenaných zlevnění: {stats['zlevneni']}")
-    lines.append(f"🔺 Zaznamenaných zdražení: {stats.get('zdrazeni', 0)}")
+    lines = ["📊 <b>TÝDENNÍ PŘEHLED</b>"]
+    lines.append(f"🆕 Nové nabídky: <b>{stats['novych']}</b>"
+                 f" · 🟢 Zlevnění: <b>{stats['zlevneni']}</b>"
+                 f" · 🔴 Zdražení: <b>{stats.get('zdrazeni', 0)}</b>")
     if stats["nejvetsi_sleva"]:
         s = stats["nejvetsi_sleva"]
-        lines.append(f"🏅 Největší sleva: {format_price(s['castka'])} – {html.escape(s['titulek'])}")
+        lines.append(f"🏅 Největší sleva: <b>{format_price(s['castka'])}</b>\n"
+                     f"     {html.escape(s['titulek'])}")
     if stats["nejlevnejsi"]:
         n = stats["nejlevnejsi"]
-        lines.append(f"💸 Nejlevnější nabídka: {format_price(n['cena'])} – {html.escape(n['titulek'])}")
+        lines.append(f"💸 Nejlevnější nabídka: <b>{format_price(n['cena'])}</b>\n"
+                     f"     {html.escape(n['titulek'])}")
     if stats["novych"] == 0 and stats["zlevneni"] == 0:
-        lines.append("Tento týden se neobjevilo nic nového.")
+        lines.append("<i>Tento týden se neobjevilo nic nového.</i>")
     send_telegram("\n".join(lines))
 
 
@@ -903,11 +910,13 @@ def hlidej_zmizele(seen, updates, today_str):
         if v["miss"] >= ZMIZENI_PO_BEZICH:
             v["gone"] = True
             titulek = html.escape(v.get("t") or "Nabídka")
-            cena = f" (naposledy {format_price(v['ref'])})" if v.get("ref") else ""
+            cena = (f"\n💰 naposledy {format_price(v['ref'])}"
+                    if v.get("ref") else "")
             send_telegram(
-                f"⌛ <b>Nabídka zmizela z výsledků</b>{cena}\n"
-                f"🏨 {titulek}\n"
-                f"<i>Neobjevila se {ZMIZENI_PO_BEZICH} kontroly po sobě – "
+                f"⌛ <b>NABÍDKA ZMIZELA</b>\n"
+                f"🏨 {titulek}"
+                f"{cena}\n"
+                f"<i>Neobjevila se {ZMIZENI_PO_BEZICH}× po sobě – "
                 f"nejspíš vyprodáno nebo stažena.</i>",
                 link=v.get("u"),
             )
@@ -1007,9 +1016,10 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
             else:
                 cena_radek = "\n💰 <i>cena neuvedena</i>"
             send_telegram(
-                f"🆕 <b>NOVÁ NABÍDKA</b> · {source_label}\n"
+                f"🆕 <b>NOVÁ NABÍDKA</b>\n"
                 f"{zprava_detail(title, card_text, source_label, link)}"
-                f"{cena_radek}",
+                f"{cena_radek}\n"
+                f"🌐 {source_label}",
                 link=link,
             )
         return 1
@@ -1035,16 +1045,17 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
             {"ref": price, "min": new_min}, title, card_text, link)
         stats_note_discount(stats, sleva, price, title)
         if notify:
-            badge = "\n🏆 <b>NEJNIŽŠÍ CENA, JAKOU JSEM U TÉTO NABÍDKY VIDĚL!</b>" if is_record else ""
+            badge = "\n🏆 <b>Rekordně nízká cena!</b>" if is_record else ""
             # Když to není rekord, ukážeme pro kontext dosavadní minimum -
             # hned vidíš, jestli má smysl čekat na další pokles.
-            min_radek = (f"\n📉 Nejnižší viděná: {format_price(new_min)}"
+            min_radek = (f"\n📉 Dosavadní minimum: {format_price(new_min)}"
                          if old_min and not is_record else "")
             send_telegram(
-                f"🔻🟥 <b>ZLEVNĚNÍ o {format_price(sleva)}</b> · {source_label}{badge}\n"
+                f"🟢 <b>ZLEVNĚNÍ −{format_price(sleva)}</b>{badge}\n"
                 f"{zprava_detail(title, card_text, source_label, link)}\n"
                 f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>"
-                f"{_za_noc(price, card_text, link)}{min_radek}",
+                f"{_za_noc(price, card_text, link)}{min_radek}\n"
+                f"🌐 {source_label}",
                 link=link,
             )
         return 1
@@ -1064,10 +1075,11 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         stats["zdrazeni"] = stats.get("zdrazeni", 0) + 1
         if notify:
             send_telegram(
-                f"🔺🟩 <b>ZDRAŽENÍ o {format_price(zdrazeni)}</b> · {source_label}\n"
+                f"🔴 <b>ZDRAŽENÍ +{format_price(zdrazeni)}</b>\n"
                 f"{zprava_detail(title, card_text, source_label, link)}\n"
                 f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>"
-                f"{_za_noc(price, card_text, link)}",
+                f"{_za_noc(price, card_text, link)}\n"
+                f"🌐 {source_label}",
                 link=link,
             )
         return 1
@@ -1398,6 +1410,11 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
         # Bez pevného limitu délky: ceny (hlavně u Eximu) bývají v textu
         # až daleko za popisem hotelu - jen odřízneme blok podobných hotelů.
         okno = re.split(r"Podobné hotely|Doporučené hotely", full_text)[0]
+        # POJISTKA: když ořez sebral většinu stránky, seklo to nejspíš už
+        # v horním MENU (Exim má "Doporučené hotely" i v navigaci!) a ne
+        # v patičce - v tom případě ořez zahodíme a bereme celý text.
+        if len(okno) < 0.3 * len(full_text):
+            okno = full_text
 
         # Termín + noci: Čedok píše "24.09 - 28.09.2026 (5 dní, 4 noci)".
         term_txt, noci = "", None
@@ -1438,8 +1455,9 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
             cena = None
         if cena is None:
             print(f"{source_label} hotel ({url}): cena nenalezena, přeskakuji.")
-            print(f"  [DIAG] text: {len(full_text)} znaků, "
+            print(f"  [DIAG] text: {len(full_text)} znaků, okno: {len(okno)} znaků, "
                   f"'Kč' na stránce: {full_text.count('Kč')}x, "
+                  f"'Kč' v okně: {okno.count('Kč')}x, "
                   f"JSON-LD cen: {len(ld)}, začátek: {okno[:160]!r}")
             continue
 
