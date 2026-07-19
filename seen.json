@@ -628,7 +628,7 @@
 "cedok:0cc44d9461": {
 "d": "2026-07-19",
 "min": 36890,
-"miss": 1,
+"miss": 2,
 "ref": 36890,
 "t": "Jaz Sakhra",
 "u": "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/hotel-jaz-sakhra,MUH2SAK/"
@@ -752,7 +752,6 @@
 "cedok:8674598ac5": {
 "d": "2026-07-19",
 "min": 21329,
-"miss": 2,
 "n": 7,
 "ref": 21329,
 "t": "Jaz Oriental Resort",
@@ -761,6 +760,7 @@
 "cedok:8a8cddff40": {
 "d": "2026-07-19",
 "min": 21329,
+"miss": 1,
 "n": 15,
 "ref": 21329,
 "t": "Jaz Oriental Resort",
@@ -836,8 +836,9 @@
 },
 "cedok:e0039a976a": {
 "d": "2026-07-19",
+"gone": true,
 "min": 20390,
-"miss": 2,
+"miss": 3,
 "n": 15,
 "ref": 20390,
 "t": "Jaz Almaza Beach Resort",
@@ -862,6 +863,7 @@
 "cedok:fee9b27040": {
 "d": "2026-07-19",
 "min": 15999,
+"miss": 1,
 "n": 15,
 "ref": 16990,
 "t": "Jaz Almazino",
@@ -1586,8 +1588,9 @@
 },
 "invia:31a6d08aec": {
 "d": "2026-07-19",
+"gone": true,
 "min": 15999,
-"miss": 2,
+"miss": 3,
 "n": 7,
 "ref": 15999,
 "t": "Jaz Almazino",
