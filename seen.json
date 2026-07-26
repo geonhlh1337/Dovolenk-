@@ -396,10 +396,19 @@
 "bluestyle:6c70848b81": {
 "d": "2026-07-25",
 "min": 32990,
+"miss": 1,
 "n": 8,
 "ref": 34190,
 "t": "Ne 26. 07. 2026 Brno 9 dní 34 190 Kč All Inclusive lm",
 "u": "https://www.blue-style.cz/egypt/hurghada/hotel-jaz-makadina/?date=2026-07-26&duration=8&depCity=10&arrCity=9&airline=Hello%20Jets&room1=2|SUPRSSV|AI"
+},
+"bluestyle:70de86c7b6": {
+"d": "2026-07-25",
+"min": 38190,
+"n": 10,
+"ref": 38190,
+"t": "Pá 31. 07. 2026 Brno 11 dní 38 190 Kč All Inclusive lm",
+"u": "https://www.blue-style.cz/egypt/hurghada/hotel-jaz-elite-asteria/?date=2026-07-31&duration=10&depCity=10&arrCity=9&airline=Hello%20Jets&room1=2|DFAMSSV|AI"
 },
 "bluestyle:724a01fce7": {
 "d": "2026-07-24",
@@ -668,6 +677,7 @@
 "bluestyle:d43787a41c": {
 "d": "2026-07-25",
 "min": 26390,
+"miss": 1,
 "n": 8,
 "ref": 37990,
 "t": "Ne 26. 07. 2026 Brno 9 dní 37 990 Kč All Inclusive lm",
@@ -729,6 +739,14 @@
 "ref": 33990,
 "t": "Pá 24. 07. 2026 Brno 15 dní 33 990 Kč All Inclusive lm",
 "u": "https://www.blue-style.cz/egypt/marsa-alam/hotel-jaz-lamaya-resort/?date=2026-07-24&room1=2|FRPV|AI"
+},
+"bluestyle:eeec60c608": {
+"d": "2026-07-25",
+"min": 43690,
+"n": 10,
+"ref": 43690,
+"t": "Pá 31. 07. 2026 Brno 11 dní 43 690 Kč Ultra All Inclusive lm",
+"u": "https://www.blue-style.cz/egypt/hurghada/hotel-jaz-elite-casa-del-mar-beach/?date=2026-07-31&duration=10&depCity=10&arrCity=9&airline=Hello%20Jets&room1=2|SUPRSV|UAI"
 },
 "bluestyle:f1b427c6c9": {
 "d": "2026-07-16",
@@ -800,7 +818,7 @@
 "cedok:0cc44d9461": {
 "d": "2026-07-25",
 "min": 31690,
-"miss": 1,
+"miss": 2,
 "ref": 36890,
 "t": "Jaz Sakhra",
 "u": "https://www.cedok.cz/dovolena/egypt/marsa-matrouh/hotel-jaz-sakhra,MUH2SAK/"
@@ -842,7 +860,7 @@
 "cedok:30763638be": {
 "d": "2026-07-25",
 "min": 17599,
-"miss": 1,
+"miss": 2,
 "n": 7,
 "ref": 17599,
 "t": "Jaz Almazino",
@@ -850,8 +868,9 @@
 },
 "cedok:3238945fd0": {
 "d": "2026-07-25",
+"gone": true,
 "min": 22147,
-"miss": 2,
+"miss": 3,
 "n": 15,
 "ref": 22147,
 "t": "Jaz Elite Crystal",
@@ -1037,6 +1056,7 @@
 "cedok:8674598ac5": {
 "d": "2026-07-25",
 "min": 21329,
+"miss": 1,
 "n": 7,
 "ref": 21329,
 "t": "Jaz Oriental Resort",
@@ -1045,7 +1065,6 @@
 "cedok:8a8cddff40": {
 "d": "2026-07-25",
 "min": 19990,
-"miss": 2,
 "n": 15,
 "ref": 21329,
 "t": "Jaz Oriental Resort",
@@ -1189,8 +1208,9 @@
 },
 "cedok:e0039a976a": {
 "d": "2026-07-25",
+"gone": true,
 "min": 19990,
-"miss": 2,
+"miss": 3,
 "n": 15,
 "ref": 20539,
 "t": "Jaz Almaza Beach Resort",
@@ -1483,6 +1503,14 @@
 "t": "Jaz Elite Amara",
 "u": "https://www.eximtours.cz/egypt/marsa-alam/marsa-alam/jaz-amara?DS=8192&GIATA=1374789&D=64419%7C64420%7C64422%7C64423%7C64424&HID=147774&MT=5&DI=AI&RCS=DR01&NN=7&MNN=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&NNM=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&DF=2026-08-16%7C2026-09-13&RD=2026-08-30&DD=2026-08-23&ERM=0&TO=4305&TT=1&PID=RMF90034&DPR=EXIM+TOURS+ATCOM&PC=155856002%2F2%2F2426%2F7&IFC=136922089%2F481085&OFC=136921054%2F481084"
 },
+"eximtours:3466eaac27": {
+"d": "2026-07-25",
+"min": 0,
+"n": 7,
+"ref": 0,
+"t": "Jaz Grand Marsa ( Ex.Jaz Grand Resort )",
+"u": "https://www.eximtours.cz/hotely/egypt/marsa-alam/el-quseir/jaz-grand-resort?DS=2&GIATA=140473&D=64419%7C64420%7C64422%7C64423%7C64424&HID=3992&MT=5&DI=GT06-AI&RCS=RMSPDBGV00&NN=7&MNN=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&NNM=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&DF=2026-11-21%7C2026-12-19&RD=2026-12-05&DD=2026-11-28&ERM=0&TO=489&TT=1&PID=AEGRMF10WG&DPR=OTSCKF&PC=7-2026-11-28&IFC=0-RMFBUD-2226-DT05-12-11-25-BP&OFC=0-BUDRMF-2225-DT28-11-05-30-BP"
+},
 "eximtours:35a96f7e91": {
 "d": "2026-07-25",
 "min": 0,
@@ -1558,8 +1586,9 @@
 },
 "eximtours:55bda1c67e": {
 "d": "2026-07-25",
+"gone": true,
 "min": 36380,
-"miss": 2,
+"miss": 3,
 "n": 7,
 "ref": 36380,
 "t": "JAZ Soma Beach Resort Egypt / Hurghada / Safaga 25. 08. (út)",
@@ -1784,6 +1813,7 @@
 "eximtours:8d8b4abe52": {
 "d": "2026-07-25",
 "min": 0,
+"miss": 1,
 "n": 7,
 "ref": 0,
 "t": "Jaz Riviera",
@@ -1792,6 +1822,7 @@
 "eximtours:8edf10b825": {
 "d": "2026-07-25",
 "min": 0,
+"miss": 1,
 "n": 7,
 "ref": 0,
 "t": "Jaz Grand Marsa ( Ex.Jaz Grand Resort )",
@@ -1828,6 +1859,7 @@
 "eximtours:939ea731e4": {
 "d": "2026-07-25",
 "min": 0,
+"miss": 1,
 "n": 7,
 "ref": 0,
 "t": "Jaz Amara",
@@ -1980,6 +2012,7 @@
 "eximtours:b64f8a1f81": {
 "d": "2026-07-25",
 "min": 0,
+"miss": 1,
 "n": 7,
 "ref": 0,
 "t": "Jaz Neo Reef Marsa",
@@ -1988,7 +2021,7 @@
 "eximtours:b78247c271": {
 "d": "2026-07-25",
 "min": 34740,
-"miss": 1,
+"miss": 2,
 "n": 7,
 "ref": 34740,
 "t": "JAZ Soma Beach Resort",
@@ -2051,6 +2084,14 @@
 "t": "Jaz Palmariva Beach Ex. Labranda Club Makadi",
 "u": "https://www.eximtours.cz/egypt/hurghada/makadi-bay/labranda-club-makadi?DS=8192&GIATA=10511&D=64419%7C64420%7C64422%7C64423%7C64424&HID=139895&MT=5&DI=AI&RCS=DR01&NN=7&MNN=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&NNM=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&DF=2026-08-19%7C2026-09-16&RD=2026-09-02&DD=2026-08-26&ERM=0&TO=4312&TT=1&PID=HRG90037&DPR=EXIM+TOURS+ATCOM&PC=5679779%2F2%2F2429%2F7&IFC=135889281%2F473318&OFC=135888390%2F473317"
 },
+"eximtours:c926d11b19": {
+"d": "2026-07-25",
+"min": 0,
+"n": 7,
+"ref": 0,
+"t": "Jaz Amara",
+"u": "https://www.eximtours.cz/hotely/egypt/marsa-alam/marsa-alam/jaz-amara?DS=2&GIATA=1374789&D=64419%7C64420%7C64422%7C64423%7C64424&HID=147774&MT=5&DI=GT06-AI&RCS=RMSPDBGV00&NN=7&MNN=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&NNM=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&DF=2026-11-21%7C2026-12-19&RD=2026-12-05&DD=2026-11-28&ERM=0&TO=489&TT=1&PID=AEGHRGGS1A&DPR=OTSCKF&PC=7-2026-11-28&IFC=0-RMFBUD-2226-DT05-12-11-25-BP&OFC=0-BUDRMF-2225-DT28-11-05-30-BP"
+},
 "eximtours:ca07540932": {
 "d": "2026-07-20",
 "gone": true,
@@ -2082,7 +2123,7 @@
 "eximtours:d340d83892": {
 "d": "2026-07-25",
 "min": 60940,
-"miss": 1,
+"miss": 2,
 "n": 7,
 "ref": 61105,
 "t": "JAZ Costa Mares Egypt / Marsa Alam / Marsa Alam 15. 12. (út)",
@@ -2097,6 +2138,30 @@
 "ref": 0,
 "t": "Jaz Riviera",
 "u": "https://www.eximtours.cz/hotely/egypt/marsa-alam/marsa-alam/jaz-riviera?DS=2&GIATA=1438117&D=64419%7C64420%7C64422%7C64423%7C64424&HID=166608&MT=5&DI=GT06-AI&RCS=RMSP00GV00&NN=7&MNN=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&NNM=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&DF=2026-11-10%7C2026-12-08&RD=2026-11-24&DD=2026-11-17&ERM=0&TO=489&TT=1&PID=AEGHRGIV1W&DPR=OTSCKF&PC=7-2026-11-17&IFC=0-RMFBUD-2226-DT24-11-12-55-BP&OFC=0-BUDRMF-2225-DT17-11-07-00-BP"
+},
+"eximtours:dcc4d1a4bf": {
+"d": "2026-07-25",
+"min": 0,
+"n": 7,
+"ref": 0,
+"t": "Jaz Neo Reef Marsa",
+"u": "https://www.eximtours.cz/hotely/egypt/marsa-alam/marsa-alam/sol-y-mar-reef-resort?DS=2&GIATA=126426&D=64419%7C64420%7C64422%7C64423%7C64424&HID=141936&MT=5&DI=GT06-AI&RCS=RMSDDBGV00&NN=7&MNN=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&NNM=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&DF=2026-11-21%7C2026-12-19&RD=2026-12-05&DD=2026-11-28&ERM=0&TO=489&TT=1&PID=AEGRMF10WE&DPR=OTSCKF&PC=7-2026-11-28&IFC=0-RMFBUD-2226-DT05-12-11-25-BP&OFC=0-BUDRMF-2225-DT28-11-05-30-BP"
+},
+"eximtours:dd4327aaad": {
+"d": "2026-07-25",
+"min": 0,
+"n": 7,
+"ref": 0,
+"t": "Jaz Riviera",
+"u": "https://www.eximtours.cz/hotely/egypt/marsa-alam/marsa-alam/jaz-riviera?DS=2&GIATA=1438117&D=64419%7C64420%7C64422%7C64423%7C64424&HID=166608&MT=5&DI=GT06-AI&RCS=RMSP00GV00&NN=7&MNN=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&NNM=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&DF=2026-11-21%7C2026-12-19&RD=2026-12-05&DD=2026-11-28&ERM=0&TO=489&TT=1&PID=AEGHRGIV1W&DPR=OTSCKF&PC=7-2026-11-28&IFC=0-RMFBUD-2226-DT05-12-11-25-BP&OFC=0-BUDRMF-2225-DT28-11-05-30-BP"
+},
+"eximtours:dd89238147": {
+"d": "2026-07-25",
+"min": 0,
+"n": 7,
+"ref": 0,
+"t": "JAZ Costa Mares",
+"u": "https://www.eximtours.cz/hotely/egypt/marsa-alam/marsa-alam/iberotel-costa-mares?DS=2&GIATA=647502&D=64419%7C64420%7C64422%7C64423%7C64424&HID=141455&MT=5&DI=GT06-AI&RCS=RMSPDBPS00&NN=7&MNN=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&NNM=7%7C8%7C9%7C10%7C11%7C12%7C13%7C14&DF=2026-11-21%7C2026-12-19&RD=2026-12-05&DD=2026-11-28&ERM=0&TO=489&TT=1&PID=AEGRMFCEG6&DPR=OTSCKF&PC=7-2026-11-28&IFC=0-RMFBUD-2226-DT05-12-11-25-BP&OFC=0-BUDRMF-2225-DT28-11-05-30-BP"
 },
 "eximtours:ea76a86455": {
 "d": "2026-07-23",
@@ -2177,6 +2242,7 @@
 "eximtours:f443b364a2": {
 "d": "2026-07-25",
 "min": 0,
+"miss": 1,
 "n": 7,
 "ref": 0,
 "t": "JAZ Costa Mares",
@@ -2242,8 +2308,9 @@
 },
 "fischer:6bae9045a4": {
 "d": "2026-07-25",
+"gone": true,
 "min": 15840,
-"miss": 2,
+"miss": 3,
 "ref": 17480,
 "t": "Jaz Sakhra Egypt / Marsa Matruh – El Alamein / Almaza Bay Ce",
 "u": "https://www.fischer.cz/egypt/marsa-matruh/almaza-bay/jaz-sakhra?DS=256&GIATA=0&D=64423&HID=156637&NNM=0%7C1%7C2%7C3%7C4%7C5%7C6%7C7%7C8%7C9%7C10%7C11%7C12%7C13%7C14%7C15%7C16%7C17%7C18%7C19%7C20%7C21%7C22%7C23%7C24%7C25%7C26&DFX=2026-09-21%7C2026-10-19&RD=2026-10-08&DD=2026-10-05&ERM=0&AC1=2&KC1=0&IC1=0&TT=0&PID=MUH90005&DPR=FISCHER+ATCOM"
@@ -2368,7 +2435,7 @@
 "n": 7,
 "ref": 19578,
 "t": "Jaz Fanara Resort",
-"u": "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-fanara-resort/zajezd/?s_offer_id=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwcm92aWRlclByZWZpeCI6IlRURiIsIm9mZmVySWQiOiIySFk2OEY5UjlST05XTkhBTllVWFZWUk9WWFM2TTJOWE83MlhHSjgySFdMWU1HMUhFN00zWVIxOU84S1VQRDQ5U05EVVBUNzJBOEdZNEJKVEdISlU3S1g2U1ZDSlcxWFVLM0JNRlNUOFhMSE9OTFRHQTI0SldIVDZUMjZKN1ZYOEpNTVJPQlYzN1dCOEFKMUoiLCJ0b3VyT3BlcmF0b3JJZCI6MTAyMTE0LCJ0b3VyT3BlcmF0b3JDb2RlIjoiWEFMTCIsImRhdGVGcm9tIjoiMjAyNjEyMTciLCJkYXRlVG8iOiIyMDI2MTIyNCIsImRheXNDb3VudCI6OCwiaG90ZWxJZCI6MTg2Njg2LCJjb3VudHJ5SWQiOjExLCJ0cmFuc3BvcnRhdGlvbklkIjozLCJhaXJwb3J0SWQiOjgyNDAsIm91dGJvdW5kRmxpZ2h0RGVwYXJ0dXJlRGF0ZSI6IjIwMjYxMjE3VDAwMDAiLCJtZWFsSWQiOjUsInJvb21Db2RlIjoiRFogQSIsInNlcnZpY2VDb2RlIjoiU1NIMTQ2Iiwib3JpZ2luYWxDdXJyZW5jeUlkIjozLCJwYXNzZW5nZXJzIjoiQUEiLCJsb2NhbGl0eUlkIjozMiwiZXh0ZXJuYWxTb3VyY2VMZW5ndGhPZlN0YXkiOjcsImV4dGVybmFsU291cmNlTmlnaHRzT2ZTdGF5Ijo3LCJvcmlnaW5hbFRvdGFsUHJpY2UiOjE1OTIuMH0.rDVLs52hWJ9EGReY_w4untM6to0Citer4WP0AJqJ8xo&c_price_unit=19578&c_price_group=39156&nl_nights=7"
+"u": "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-fanara-resort/zajezd/?s_offer_id=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwcm92aWRlclByZWZpeCI6IlRURiIsIm9mZmVySWQiOiIyS0FMSExWQjRONzlXTjNPQkVOT1I0Sk5YWFRHVENLSjZGSzRFRTgzVUI2N1NGS0gxMlYzVEVWVjNKUFNSNFVSU0NYRVo4VFpFN1lGNEJYNk1YWUxCQlU3WFZPMUxNQk82TEFIRFdBOUVaQUVWQlRFMVhVTFpFTVVDSExKMURPTk5PTjRTR1BZNzNaSjJIV0EiLCJ0b3VyT3BlcmF0b3JJZCI6MTAyMTE0LCJ0b3VyT3BlcmF0b3JDb2RlIjoiWEFMTCIsImRhdGVGcm9tIjoiMjAyNjEyMTciLCJkYXRlVG8iOiIyMDI2MTIyNCIsImRheXNDb3VudCI6OCwiaG90ZWxJZCI6MTg2Njg2LCJjb3VudHJ5SWQiOjExLCJ0cmFuc3BvcnRhdGlvbklkIjozLCJhaXJwb3J0SWQiOjgyNDAsIm91dGJvdW5kRmxpZ2h0RGVwYXJ0dXJlRGF0ZSI6IjIwMjYxMjE3VDAwMDAiLCJtZWFsSWQiOjUsInJvb21Db2RlIjoiRFogQSIsInNlcnZpY2VDb2RlIjoiU1NIMTQ2Iiwib3JpZ2luYWxDdXJyZW5jeUlkIjozLCJwYXNzZW5nZXJzIjoiQUEiLCJsb2NhbGl0eUlkIjozMiwiZXh0ZXJuYWxTb3VyY2VMZW5ndGhPZlN0YXkiOjcsImV4dGVybmFsU291cmNlTmlnaHRzT2ZTdGF5Ijo3LCJvcmlnaW5hbFRvdGFsUHJpY2UiOjE1OTIuMH0.jftsoboa4olT53mA-6l2ZC87QVuS9N5F-QM3EhIxRUg&c_price_unit=19578&c_price_group=39156&nl_nights=7"
 },
 "invia:23151a5060": {
 "d": "2026-07-16",
@@ -2396,17 +2463,15 @@
 "n": 7,
 "ref": 16733,
 "t": "Jaz Mirabel Beach Resort",
-"u": "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-mirabel-beach-resort/zajezd/?s_offer_id=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwcm92aWRlclByZWZpeCI6IlRURiIsIm9mZmVySWQiOiIyWVBUR0c5WlU2T09XT1daWUtGREZXVTg5MU1OTlVaTEE4VlVIQTROQ1U2QlQ2QVNWUzhPSk9GMUREMUpTQkZFS1U4REJBRExXQ0RNTllYM0cxRFAzRU9ISzZPQUFUQ0VYVExOUzNFQU5EV0dCQ0hTUlZQREtYQzMyQUZIWDdVWVoyUk9FNlczUkYyVjFNMVMiLCJ0b3VyT3BlcmF0b3JJZCI6MTAyNDQ0LCJ0b3VyT3BlcmF0b3JDb2RlIjoiRkVSIiwiZGF0ZUZyb20iOiIyMDI3MDIyNyIsImRhdGVUbyI6IjIwMjcwMzA2IiwiZGF5c0NvdW50Ijo4LCJob3RlbElkIjozNDg2NCwiY291bnRyeUlkIjoxMSwidHJhbnNwb3J0YXRpb25JZCI6MywiYWlycG9ydElkIjo4MjQwLCJvdXRib3VuZEZsaWdodERlcGFydHVyZURhdGUiOiIyMDI3MDIyN1QwMDAwIiwibWVhbElkIjo1LCJyb29tQ29kZSI6IkRaREEiLCJzZXJ2aWNlQ29kZSI6IlNTSDIxNSIsIm9yaWdpbmFsQ3VycmVuY3lJZCI6MywicGFzc2VuZ2VycyI6IkFBIiwibG9jYWxpdHlJZCI6MzIsImV4dGVybmFsU291cmNlTGVuZ3RoT2ZTdGF5Ijo3LCJleHRlcm5hbFNvdXJjZU5pZ2h0c09mU3RheSI6Nywib3JpZ2luYWxUb3RhbFByaWNlIjoxMzMwLjB9.11Nhxb9sKe-FP2kG8cpiKBcGoR0uiiMVYoXIQIbsBwM&c_price_unit=16455&c_price_group=32910&nl_nights=7"
+"u": "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-mirabel-beach-resort/zajezd/?s_offer_id=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwcm92aWRlclByZWZpeCI6IlRURiIsIm9mZmVySWQiOiIyTkhTQThIQ0MxT0xXTkFGV0VXVVBXMzhUMUpGSllOS0NKVkNINjRMUzNYWloyTlRWVEdPRktYTVJSVVNVQkdXS0paQ0gxNDlFR0ROTlpCSkVYVTlURUZIRTZBUkJPUEZNTjRVWDhWRUNBTjhDOTZWVjJIT0JLRk1LSDhUVUZHRU1KWkNINjRPRDlTVThWQUEiLCJ0b3VyT3BlcmF0b3JJZCI6MTAyNDQ0LCJ0b3VyT3BlcmF0b3JDb2RlIjoiRkVSIiwiZGF0ZUZyb20iOiIyMDI3MDIyNyIsImRhdGVUbyI6IjIwMjcwMzA2IiwiZGF5c0NvdW50Ijo4LCJob3RlbElkIjozNDg2NCwiY291bnRyeUlkIjoxMSwidHJhbnNwb3J0YXRpb25JZCI6MywiYWlycG9ydElkIjo4MjQwLCJvdXRib3VuZEZsaWdodERlcGFydHVyZURhdGUiOiIyMDI3MDIyN1QwMDAwIiwibWVhbElkIjo1LCJyb29tQ29kZSI6IkRaREEiLCJzZXJ2aWNlQ29kZSI6IlNTSDIxNSIsIm9yaWdpbmFsQ3VycmVuY3lJZCI6MywicGFzc2VuZ2VycyI6IkFBIiwibG9jYWxpdHlJZCI6MzIsImV4dGVybmFsU291cmNlTGVuZ3RoT2ZTdGF5Ijo3LCJleHRlcm5hbFNvdXJjZU5pZ2h0c09mU3RheSI6Nywib3JpZ2luYWxUb3RhbFByaWNlIjoxMzMwLjB9.1tD98eXnIT8AlGnIRc4hiWK7P5c56MAiK8ucxYV7oSo&c_price_unit=16455&c_price_group=32910&nl_nights=7"
 },
 "invia:2ead7f404a": {
-"d": "2026-07-22",
-"gone": true,
-"min": 27190,
-"miss": 3,
+"d": "2026-07-25",
+"min": 25190,
 "n": 7,
-"ref": 27190,
+"ref": 25190,
 "t": "Jaz Tamerina",
-"u": "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-tamerina/zajezd/?s_offer_id=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwcm92aWRlclByZWZpeCI6IklOVkYiLCJ0ZXJtSWQiOiI1NDk5MjY4NjgiLCJ0b3VyT3BlcmF0b3JJZCI6MzksImNoZWNrSW5EYXRlIjoiMjAyNjA4MDEiLCJjaGVja091dERhdGUiOiIyMDI2MDgwOSIsImRheXNDb3VudCI6OSwiaG90ZWxJZCI6MTg2NzA5LCJ0b3VySWQiOjE2NDU1ODksInRyYW5zcG9ydGF0aW9uSWQiOjMsImRlcGFydHVyZUFpcnBvcnQiOjMsIm91dGJvdW5kRmxpZ2h0RGVwYXJ0dXJlRGF0ZSI6IjIwMjYwODAxVDA4NTAiLCJtZWFsSWQiOjUsImRpY3RSb29tSWQiOjEyNTUwMDE1NDIsImZsaWdodEluZm9JZCI6MTk3ODc1ODI0NSwicGFzc2VuZ2VycyI6IkFBIiwiY291bnRyeUlkIjoxMSwibG9jYWxpdHlJZCI6MTA4OCwib3JpZ2luYWxUb3RhbFByaWNlIjo1NDM4MC4wLCJvcmlnaW5hbEN1cnJlbmN5SWQiOjF9.HJTkxPj4RKhC_ZhD9vGr1etM2jd5ySkDHy1repnDjoI&c_price_unit=27190&c_price_group=54380&nl_nights=7"
+"u": "https://www.invia.cz/hotel/egypt/marsa-matrouh/jaz-tamerina/zajezd/?s_offer_id=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwcm92aWRlclByZWZpeCI6IklOVkYiLCJ0ZXJtSWQiOiI1NDk5MjY4NjgiLCJ0b3VyT3BlcmF0b3JJZCI6MzksImNoZWNrSW5EYXRlIjoiMjAyNjA4MDEiLCJjaGVja091dERhdGUiOiIyMDI2MDgwOSIsImRheXNDb3VudCI6OSwiaG90ZWxJZCI6MTg2NzA5LCJ0b3VySWQiOjE2NDU1ODksInRyYW5zcG9ydGF0aW9uSWQiOjMsImRlcGFydHVyZUFpcnBvcnQiOjMsIm91dGJvdW5kRmxpZ2h0RGVwYXJ0dXJlRGF0ZSI6IjIwMjYwODAxVDA4NTAiLCJtZWFsSWQiOjUsImRpY3RSb29tSWQiOjEyNTUwMDE1NDIsImZsaWdodEluZm9JZCI6MTk3ODc1ODI0NSwicGFzc2VuZ2VycyI6IkFBIiwiY291bnRyeUlkIjoxMSwibG9jYWxpdHlJZCI6MTA4OCwib3JpZ2luYWxUb3RhbFByaWNlIjo1MDM4MC4wLCJvcmlnaW5hbEN1cnJlbmN5SWQiOjF9.ESmXUad_O8LJ--SZONB3vC3AcQNJlMhZIWO2uGh0Nqk&c_price_unit=25190&c_price_group=50380&nl_nights=7"
 },
 "invia:31a6d08aec": {
 "d": "2026-07-19",
@@ -2687,7 +2752,7 @@
 "n": 7,
 "ref": 15864,
 "t": "Jaz Mirabel Park Club",
-"u": "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-mirabel-park-club/zajezd/?s_offer_id=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwcm92aWRlclByZWZpeCI6IlRURiIsIm9mZmVySWQiOiIyM0ZUSDZTN09EMjdXTkNLS1VVVzdQMkJPQ0JEUk1SRUJYMUpGVTJIMUpORkRQM0c0VUxaN0MxVE1DMlY3S0hPQTRUWlVKR0tDMVZSOEFIWE84NEY3TzFaQzJBRThIUldEOTJIU05QM0Y4MTdBUDNZMlVDWTdHMURSQzY3MVRTUjZTSjFaU1RLNEtVVjJUWjEiLCJ0b3VyT3BlcmF0b3JJZCI6MTAyNDQ0LCJ0b3VyT3BlcmF0b3JDb2RlIjoiRkVSIiwiZGF0ZUZyb20iOiIyMDI3MDIyNyIsImRhdGVUbyI6IjIwMjcwMzA2IiwiZGF5c0NvdW50Ijo4LCJob3RlbElkIjo0NTY4NjUsImNvdW50cnlJZCI6MTEsInRyYW5zcG9ydGF0aW9uSWQiOjMsImFpcnBvcnRJZCI6ODI0MCwib3V0Ym91bmRGbGlnaHREZXBhcnR1cmVEYXRlIjoiMjAyNzAyMjdUMDAwMCIsIm1lYWxJZCI6NSwicm9vbUNvZGUiOiJEVVBBIiwic2VydmljZUNvZGUiOiJTU0gzMjUiLCJvcmlnaW5hbEN1cnJlbmN5SWQiOjMsInBhc3NlbmdlcnMiOiJBQSIsImxvY2FsaXR5SWQiOjMyLCJleHRlcm5hbFNvdXJjZUxlbmd0aE9mU3RheSI6NywiZXh0ZXJuYWxTb3VyY2VOaWdodHNPZlN0YXkiOjcsIm9yaWdpbmFsVG90YWxQcmljZSI6MTI2MC4wfQ.0Bm-v0so24R30CxsYZ8zIFH4qb5Ujo_xwBMZ3FrKAcQ&c_price_unit=15589&c_price_group=31178&nl_nights=7"
+"u": "https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-mirabel-park-club/zajezd/?s_offer_id=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwcm92aWRlclByZWZpeCI6IlRURiIsIm9mZmVySWQiOiIyQU5TQkVKSjdIMjNXT1k0TTlERllQVEJEQ0NMTVJXSEREMTFGUDJCTEFGVkZNWUg0VlVaU0dKQ0hQVk05S0U3QUIxWVdTODZVNlZKOEJWSFJWTFdZT1NaUjJPTTk0RFg3Q0oyWEoyOE03QUZEVkJYRjFNMVgzOVU5RkhNOUtFN0FCU1pXUzg4WlY0VTlLUkoiLCJ0b3VyT3BlcmF0b3JJZCI6MTAyNDQ0LCJ0b3VyT3BlcmF0b3JDb2RlIjoiRkVSIiwiZGF0ZUZyb20iOiIyMDI3MDIyNyIsImRhdGVUbyI6IjIwMjcwMzA2IiwiZGF5c0NvdW50Ijo4LCJob3RlbElkIjo0NTY4NjUsImNvdW50cnlJZCI6MTEsInRyYW5zcG9ydGF0aW9uSWQiOjMsImFpcnBvcnRJZCI6ODI0MCwib3V0Ym91bmRGbGlnaHREZXBhcnR1cmVEYXRlIjoiMjAyNzAyMjdUMDAwMCIsIm1lYWxJZCI6NSwicm9vbUNvZGUiOiJEVVBBIiwic2VydmljZUNvZGUiOiJTU0gzMjUiLCJvcmlnaW5hbEN1cnJlbmN5SWQiOjMsInBhc3NlbmdlcnMiOiJBQSIsImxvY2FsaXR5SWQiOjMyLCJleHRlcm5hbFNvdXJjZUxlbmd0aE9mU3RheSI6NywiZXh0ZXJuYWxTb3VyY2VOaWdodHNPZlN0YXkiOjcsIm9yaWdpbmFsVG90YWxQcmljZSI6MTI2MC4wfQ.7keM_48lOxniNigwT_wC3lRzY3su6W61yg-Qar42j2M&c_price_unit=15589&c_price_group=31178&nl_nights=7"
 },
 "invia:cd9d1875ec": {
 "d": "2026-07-15",
@@ -2775,7 +2840,7 @@
 "invia:e469980353": {
 "d": "2026-07-25",
 "min": 36890,
-"miss": 1,
+"miss": 2,
 "n": 7,
 "ref": 36890,
 "t": "Jaz Sakhra",
