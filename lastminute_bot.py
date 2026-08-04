@@ -5,8 +5,10 @@ import html
 import json
 import time
 import hashlib
+import base64
 import datetime
 import requests
+from urllib.parse import urljoin, urlparse, parse_qs
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
@@ -110,6 +112,12 @@ MAX_CENA = None
 # kterých počet nocí nejde z textu přečíst, procházejí (ať o ně nepřijdeš).
 MIN_NOCI = 7
 
+# Horní mez věrohodné délky pobytu při čtení HOTELOVÝCH stránek. Délka se
+# tam odvozuje z datumů v textu a při nešťastném rozložení stránky může
+# spojit dva různé termíny do jednoho "pobytu". Delší výsledek bereme jako
+# neznámý, ať nekazí přepočet Kč/noc a denní digest.
+MAX_NOCI_HOTEL_STRANKA = 21
+
 # Oznamovat i ZDRAŽENÍ? True = přijde 🔺 zpráva, když nabídka zdraží.
 # False = chodí jen zlevnění 🔻 (a nové nabídky).
 OZNAMOVAT_ZDRAZENI = True
@@ -130,6 +138,11 @@ MIN_ZMENA_CENY = 300
 # poplachům při výpadku webu). Užitečný signál "příště neváhej".
 OZNAMOVAT_ZMIZENI = True
 ZMIZENI_PO_BEZICH = 3
+# Kolik karet musí běh aspoň přečíst, aby se zmizení vůbec počítalo.
+# Dřív bylo číslo 10 natvrdo uvnitř funkce - když si někdo zúží seznam
+# zdrojů (např. jen hotelové stránky), hlídání se tiše vypne a není
+# poznat proč. Teď je to vidět a jde to změnit.
+MIN_KARET_PRO_ZMIZENI = 10
 
 # Denní digest: jedna ranní zpráva s TOP 5 nejlevnějšími Jaz nabídkami
 # přepočtenými na cenu za NOC (z nabídek viděných tentýž den; každý hotel
@@ -390,21 +403,47 @@ def default_stats(week):
         "novych": 0,
         "zlevneni": 0,
         "zdrazeni": 0,
-        "nejvetsi_sleva": None,   # {"castka": int, "titulek": str}
-        "nejlevnejsi": None,      # {"cena": int, "titulek": str}
+        "nejvetsi_sleva": None,
+        "nejlevnejsi": None,
+        # Histogram hodin (UTC), ve kterých bot zachytil změnu ceny.
+        # Ceny na Invii se mění dynamicky a pevný rozvrh neexistuje, takže
+        # tohle je jediný způsob, jak zjistit, kdy se mění TVÉ nabídky.
+        "zmeny_po_hodinach": {},
     }
 
 
 def load_stats(current_week):
+    """
+    OPRAVA: dřív se vrátil libovolný slovník, který měl klíč "week".
+    Když stats.json vznikl starší verzí skriptu nebo se zápis přerušil,
+    chyběly klíče jako "novych" a běh spadl na KeyError - ještě PŘED
+    uložením seen.json, takže se ztratil stav a další běh poslal záplavu
+    zpráv. Teď načtené hodnoty vždy doplníme na kompletní strukturu.
+    """
+    data = {}
     if os.path.exists(STATS_FILE):
         try:
             with open(STATS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict) and "week" in data:
-                return data
+                nacteno = json.load(f)
+            if isinstance(nacteno, dict) and "week" in nacteno:
+                data = nacteno
         except Exception:
-            pass
-    return default_stats(current_week)
+            data = {}
+    stats = default_stats(data.get("week") or current_week)
+    for k in ("novych", "zlevneni", "zdrazeni"):
+        v = data.get(k)
+        stats[k] = v if isinstance(v, int) else 0
+    for k, podklic in (("nejvetsi_sleva", "castka"), ("nejlevnejsi", "cena")):
+        v = data.get(k)
+        if isinstance(v, dict) and isinstance(v.get(podklic), int):
+            stats[k] = {podklic: v[podklic], "titulek": str(v.get("titulek", ""))}
+    h = data.get("zmeny_po_hodinach")
+    if isinstance(h, dict):
+        stats["zmeny_po_hodinach"] = {str(k): v for k, v in h.items()
+                                      if isinstance(v, int)}
+    if isinstance(data.get("digest_date"), str):
+        stats["digest_date"] = data["digest_date"]
+    return stats
 
 
 def save_stats(stats):
@@ -440,16 +479,33 @@ def _telegram_post(text, link=None):
         payload["reply_markup"] = json.dumps({
             "inline_keyboard": [[{"text": "🔗 Otevřít nabídku", "url": link}]]
         })
-    resp = requests.post(url, data=payload, timeout=20)
-    if resp.status_code == 429:
-        try:
-            retry_after = resp.json().get("parameters", {}).get("retry_after", 3)
-        except Exception:
-            retry_after = 3
-        time.sleep(retry_after + 1)
+    # Výpadek sítě / Telegramu NESMÍ shodit celý běh: dřív výjimka z
+    # requests.post probublala až do main() a běh skončil PŘED uložením
+    # seen.json - stav se ztratil a další běh posílal nabídky znovu.
+    try:
         resp = requests.post(url, data=payload, timeout=20)
-    if not resp.ok:
-        print("Chyba při odesílání na Telegram:", resp.text)
+        if resp.status_code == 429:
+            try:
+                retry_after = resp.json().get("parameters", {}).get("retry_after", 3)
+            except Exception:
+                retry_after = 3
+            time.sleep(retry_after + 1)
+            resp = requests.post(url, data=payload, timeout=20)
+        if not resp.ok:
+            print("Chyba při odesílání na Telegram:", resp.text)
+            # Nejčastější příčina odmítnutí je vadné HTML nebo neplatná URL
+            # v tlačítku - zkusíme ještě jednou jako čistý text, ať se
+            # informace neztratí úplně.
+            if link or "parse" in resp.text.lower():
+                try:
+                    requests.post(url, data={"chat_id": CHAT_ID,
+                                             "text": re.sub(r"<[^>]+>", "", text),
+                                             "disable_web_page_preview": True},
+                                  timeout=20)
+                except Exception as e:
+                    print("  Ani náhradní odeslání neprošlo:", e)
+    except Exception as e:
+        print("Telegram nedostupný (pokračuji dál):", e)
     time.sleep(4)  # limit ~20 zpráv/min do jednoho chatu
 
 
@@ -494,12 +550,14 @@ def format_price(value):
 _karet_parsovano = 0
 
 
-def _pridej_meta(entry, title, card_text, link):
+def _pridej_meta(entry, title, card_text, link, ck=""):
     """
     Doplní do záznamu v seen.json metadata pro denní digest a hlídání
     zmizelých nabídek: t=titulek, n=počet nocí, u=odkaz.
     """
-    t = (title or "").strip()
+    # Ukládáme UŽ VYČIŠTĚNÝ název - do denního digestu a do zpráv o zmizení
+    # se dřív dostávalo "Zobrazit nabídku" místo jména hotelu.
+    t = nazev_hotelu(title, card_text, link or "")
     if t:
         entry["t"] = t[:60]
     n = extract_nights(card_text, link)
@@ -507,6 +565,10 @@ def _pridej_meta(entry, title, card_text, link):
         entry["n"] = n
     if link:
         entry["u"] = link
+    # Jméno cestovky ukládáme, ať je vidět i v denním digestu a ve zprávě
+    # o zmizení nabídky - tam už text karty k dispozici není.
+    if ck:
+        entry["ck"] = ck[:40]
     return entry
 
 
@@ -521,18 +583,56 @@ def _za_noc(price, card_text, url=""):
     return ""
 
 
-def zprava_detail(title, card_text, source_label, url=""):
+# Texty odkazů, které NEJSOU názvem hotelu (jsou to popisky tlačítek).
+# Seznam vychází z reálného seen.json, kde 63 ze 455 nabídek mělo jako
+# "název hotelu" uloženo právě tohle.
+NEPOUZITELNE_TITULKY = {
+    "nabídka last minute", "zobrazit nabídku", "zobrazit detail zájezdu",
+    "zobrazit detail", "detail zájezdu", "detail", "hotel", "více",
+    "více informací", "zobrazit", "koupit", "vybrat termín", "rezervovat",
+}
+
+
+def nazev_hotelu(title, card_text, url=""):
+    """
+    Vrátí použitelný název hotelu. Priorita:
+      1) titulek odkazu, pokud to není popisek tlačítka ani jen cena
+      2) název ze slugu v URL (/hotel/egypt/hurghada/jaz-aquaviva/)
+      3) první rozumný kus textu karty
+    Dřív se nahrazoval jen přesný titulek "Nabídka last minute" nebo
+    "Hotel", takže do zpráv chodilo 🏨 Zobrazit nabídku.
+    """
+    t = (title or "").strip()
+    je_jen_cena = bool(t) and not re.search(r"[A-Za-zÁ-Žá-ž]{3,}", re.sub(
+        r"\bod\b|\bKč\b|\bos\b", "", t, flags=re.IGNORECASE))
+    if t and t.lower() not in NEPOUZITELNE_TITULKY and not je_jen_cena:
+        return t[:60]
+    ze_slugu = ""
+    if url:
+        ze_slugu = _hotel_ze_slugu(url)
+        # _hotel_z_cesty bere POSLEDNÍ segment cesty - u odkazu typu
+        # /zajezd/?s_offer_id=123 by vrátilo nesmysl "Zajezd", proto ho
+        # použijeme jen tam, kde cesta opravdu vede na hotel.
+        if not ze_slugu and "hotel" in url.lower():
+            ze_slugu = _hotel_z_cesty(url)
+    if ze_slugu and re.search(r"[A-Za-zÁ-Žá-ž]{3,}", ze_slugu):
+        return ze_slugu[:60]
+    return clean_card_text(card_text)[:60] or "Nabídka last minute"
+
+
+def zprava_detail(title, card_text, source_label, url="", ck=""):
     """
     Sestaví přehledné tělo zprávy: hotel, termín, noci, strava, odlet, popis.
     """
     radky = []
-    # Název hotelu - z title, doplněný z textu karty, kdyby byl title prázdný
-    hotel = (title or "").strip()
-    if not hotel or hotel.lower() in ("nabídka last minute", "hotel"):
-        hotel = clean_card_text(card_text)[:60]
+    hotel = nazev_hotelu(title, card_text, url)
     # html.escape: názvy z webu mohou obsahovat &, < nebo > - bez escapování
     # by Telegram (parse_mode=HTML) zprávu odmítl a vůbec by nedorazila.
     radky.append(f"🏨 <b>{html.escape(hotel)}</b>")
+    # Pořádající cestovní kancelář. U Invie ji čteme z odkazu nabídky,
+    # takže je vidět, KDO zájezd pořádá - ne jen "zdroj: Invia".
+    if ck:
+        radky.append(f"🏢 <b>{html.escape(ck)}</b>")
 
     # Termín · počet nocí na JEDNOM řádku - kompaktnější a přehlednější
     term = extract_term(card_text)
@@ -787,6 +887,18 @@ def make_offer_key(source, base_path, card_text, title=""):
     return f"{source}:{short_hash(f'{base_path}|{date_part}|{strava}|{titulek}')}"
 
 
+def _nove_minimum(*ceny):
+    """
+    Historické minimum z libovolných kandidátů; nuly (= cena neznámá)
+    ignoruje. Dřív se minimum počítalo jako `min(price, old_min) if old_min
+    else price` - když bylo old_min nulové (nabídka poprvé viděná bez ceny)
+    a pak přišla VYŠŠÍ cena, minimum se nastavilo na tu vyšší a známá
+    nižší referenční cena se ztratila (falešné "rekordně nízké ceny").
+    """
+    platne = [c for c in ceny if c]
+    return min(platne) if platne else 0
+
+
 def stats_note_new(stats, price, title):
     stats["novych"] += 1
     if price and (stats["nejlevnejsi"] is None or price < stats["nejlevnejsi"]["cena"]):
@@ -803,18 +915,27 @@ def stats_note_discount(stats, sleva, price, title):
 
 def send_weekly_summary(stats):
     lines = ["📊 <b>TÝDENNÍ PŘEHLED</b>"]
-    lines.append(f"🆕 Nové nabídky: <b>{stats['novych']}</b>"
-                 f" · 🟢 Zlevnění: <b>{stats['zlevneni']}</b>"
+    # .get() všude: souhrn se posílá jen jednou týdně, takže případný pád
+    # kvůli chybějícímu klíči by se objevil až za týden a shodil by běh
+    # před uložením stavu.
+    lines.append(f"🆕 Nové nabídky: <b>{stats.get('novych', 0)}</b>"
+                 f" · 🟢 Zlevnění: <b>{stats.get('zlevneni', 0)}</b>"
                  f" · 🔴 Zdražení: <b>{stats.get('zdrazeni', 0)}</b>")
-    if stats["nejvetsi_sleva"]:
+    if stats.get("nejvetsi_sleva"):
         s = stats["nejvetsi_sleva"]
         lines.append(f"🏅 Největší sleva: <b>{format_price(s['castka'])}</b>\n"
-                     f"     {html.escape(s['titulek'])}")
-    if stats["nejlevnejsi"]:
+                     f"     {html.escape(s.get('titulek') or '')}")
+    if stats.get("nejlevnejsi"):
         n = stats["nejlevnejsi"]
         lines.append(f"💸 Nejlevnější nabídka: <b>{format_price(n['cena'])}</b>\n"
-                     f"     {html.escape(n['titulek'])}")
-    if stats["novych"] == 0 and stats["zlevneni"] == 0:
+                     f"     {html.escape(n.get('titulek') or '')}")
+    # Kdy se ceny reálně mění - měřeno tímto botem, ne odhadem z článků.
+    hodiny = stats.get("zmeny_po_hodinach") or {}
+    if hodiny:
+        top = sorted(hodiny.items(), key=lambda kv: (-kv[1], kv[0]))[:3]
+        popis = ", ".join(f"{h}:00 UTC ({c}×)" for h, c in top)
+        lines.append(f"⏰ Nejvíc změn cen: {popis}")
+    if not stats.get("novych") and not stats.get("zlevneni"):
         lines.append("<i>Tento týden se neobjevilo nic nového.</i>")
     send_telegram("\n".join(lines))
 
@@ -890,10 +1011,11 @@ def hlidej_zmizele(seen, updates, today_str):
     """
     if not OZNAMOVAT_ZMIZENI:
         return
-    if _karet_parsovano < 10:
+    if _karet_parsovano < MIN_KARET_PRO_ZMIZENI:
         # Weby skoro nic nevrátily (výpadek/blokace) - nepočítat zmizení,
         # jinak by po jednom rozbitém běhu přišla vlna falešných ⌛ zpráv.
-        print(f"Jen {_karet_parsovano} karet za běh - hlídání zmizelých přeskočeno.")
+        print(f"Jen {_karet_parsovano} karet za běh (min. {MIN_KARET_PRO_ZMIZENI}) "
+              f"- hlídání zmizelých přeskočeno.")
         return
     dnes = datetime.date.fromisoformat(today_str)
     for k, v in seen.items():
@@ -902,7 +1024,8 @@ def hlidej_zmizele(seen, updates, today_str):
         d = v.get("d")
         try:
             stari = (dnes - datetime.date.fromisoformat(d)).days if d else 999
-        except ValueError:
+        except (ValueError, TypeError):
+            # TypeError: kdyby v poškozeném seen.json bylo "d" např. číslo.
             stari = 999
         if stari > 14:
             continue  # stará nabídka - zmizení už není zajímavé
@@ -912,9 +1035,12 @@ def hlidej_zmizele(seen, updates, today_str):
             titulek = html.escape(v.get("t") or "Nabídka")
             cena = (f"\n💰 naposledy {format_price(v['ref'])}"
                     if v.get("ref") else "")
+            ck_radek = (f"\n🏢 {html.escape(v.get('ck') or '')}"
+                        if v.get("ck") else "")
             send_telegram(
                 f"⌛ <b>NABÍDKA ZMIZELA</b>\n"
                 f"🏨 {titulek}"
+                f"{ck_radek}"
                 f"{cena}\n"
                 f"<i>Neobjevila se {ZMIZENI_PO_BEZICH}× po sobě – "
                 f"nejspíš vyprodáno nebo stažena.</i>",
@@ -937,16 +1063,17 @@ def send_daily_digest(seen, today_str):
             continue
         za_noc = ref / noci
         if t not in nejlepsi or za_noc < nejlepsi[t][0]:
-            nejlepsi[t] = (za_noc, ref, noci, v.get("u"))
+            nejlepsi[t] = (za_noc, ref, noci, v.get("u"), v.get("ck") or "")
     if not nejlepsi:
         return
     lines = ["🌅 <b>Ranní přehled – nejlevnější Jaz za noc</b>"]
     serazeno = sorted(nejlepsi.items(), key=lambda kv: kv[1][0])
-    for t, (za_noc, ref, noci, link) in serazeno[:5]:
+    for t, (za_noc, ref, noci, link, ck) in serazeno[:5]:
         nazev = html.escape(t)
         if link:
             nazev = f'<a href="{html.escape(link)}">{nazev}</a>'
-        lines.append(f"• {nazev}: <b>{format_price(int(round(za_noc)))}/noc</b>"
+        ck_txt = f" <i>({html.escape(ck)})</i>" if ck else ""
+        lines.append(f"• {nazev}{ck_txt}: <b>{format_price(int(round(za_noc)))}/noc</b>"
                      f" ({format_price(ref)} / {noci} nocí)")
     send_telegram("\n".join(lines))
 
@@ -970,10 +1097,259 @@ def prune_seen(seen, updates, today_str, max_age_days=60):
         try:
             if datetime.date.fromisoformat(d) >= cutoff:
                 out[k] = v
-        except ValueError:
+        except (ValueError, TypeError):
             v["d"] = today_str
             out[k] = v
     return out
+
+
+# ============================================================
+#   ČTENÍ STRUKTUROVANÝCH DAT Z ODKAZŮ INVIE (jen zdroj "invia")
+# ============================================================
+# Každý odkaz na detail zájezdu na Invii má parametr s_offer_id, což je JWT.
+# Jeho prostřední část je base64url s JSON popisem zájezdu: hotelId,
+# tourOperatorId (= POŘÁDAJÍCÍ CESTOVKA), termín, počet dní, strava, letiště.
+# V query je navíc c_price_unit = cena za osobu v Kč.
+# Ověřeno na 160 reálných záznamech ze seen.json: rozebrat se dá 160/160
+# a c_price_unit je přítomné u 100 % odkazů.
+#
+# Data odsud se používají jen pro CENU, DÉLKU, TERMÍN, STRAVU a JMÉNO CK.
+# KLÍČ nabídky se dál počítá ze textu karty jako dřív - jinak by se
+# zneplatnila stávající seen.json a bot by poslal vše znovu jako nové.
+
+CK_FILE = "ck.json"
+
+# Chceme u nabídek Invie dohledávat jméno neznámé cestovky otevřením
+# detailu nabídky? Stojí to jedno načtení stránky za každou NOVOU cestovku,
+# výsledek se uloží do ck.json a příště se už nenačítá.
+DOHLEDAVAT_CK = True
+MAX_DOHLEDANI_ZA_BEH = 5
+
+# tourOperatorCode z payloadu -> jméno. Kód je jen u části nabídek
+# (feed TravelTainment), ale když je, je spolehlivý.
+CK_PODLE_KODU = {
+    "DER": "DER Touristik", "ALL": "Alltours", "XALL": "Alltours",
+    "SLR": "Schauinsland Reisen", "XLMX": "LMX Touristik", "LMX": "LMX Touristik",
+    "VTO": "V Tours", "VTOI": "V Tours International", "XPUR": "Xpur Reisen",
+    "OGE": "Öger Tours",
+}
+
+# Ruční mapa tourOperatorId -> jméno. Sem si dopiš, co bot nedohledal;
+# ID uvidíš v logu na řádku "neznámá CK id=...".
+CK_PODLE_ID = {}
+
+# Jména cestovek, která bot hledá v textu detailu nabídky, když ID nezná.
+# Vychází ze stránky invia.cz/cestovni-kancelare/. Delší názvy jsou dřív,
+# aby "Blue Style" nepřebilo "Blue Style.pl".
+ZNAME_CK = [
+    "Blue Style.pl", "Blue Sky Travel", "Blue Style", "Coral Travel Swiss",
+    "Coral Travel CZ", "Coral Touristik", "Coral Travel", "DER Touristik SK",
+    "DERTOUR Suisse", "DER Touristik", "Schauinsland", "Alltours", "Alexandria",
+    "Anex Tour", "Canaria travel", "Čedok", "Eso Travel", "ETI", "TUI.CZ",
+    "TUI.PL", "TUI", "Itaka", "Orex Travel", "Join UP", "LMX Touristik",
+    "LMXI International", "LMX", "V Tours International", "V Tours",
+    "Xpur Reisen", "Öger Tours", "Solvex", "Sun&Fun", "Exim Tours", "Fischer",
+    "Firo-tour", "Nev-Dama", "Kartago Tours", "Ancora", "Atis", "Azzurro",
+    "Best Reisen", "Brenna", "Campana", "Datour", "Emma", "Globtour",
+    "IdealTour", "Inex", "Karavan", "Kompas", "Ludor", "Marco Polo",
+    "Mayer & Crocus", "Palma Travel", "Redok Travel", "Rekrea", "SiamTravel",
+    "Skalla", "Victoria", "VVV Tour", "Vega Tour", "Za sluncem", "Aquamarin",
+    "Olimar", "Mondial", "I.D. Riva Tours", "Rainbow tours", "Pegas tour",
+]
+
+# mealId -> strava (odvozeno z reálných dat; mealId 5 má drtivá většina
+# egyptských all inclusive nabídek). Neznámé ID = strava se nezobrazí,
+# raději nic než špatný údaj.
+STRAVA_PODLE_ID = {1: "Bez stravy", 2: "Snídaně", 3: "Polopenze",
+                   4: "Plná penze", 5: "All inclusive", 6: "Ultra all inclusive"}
+
+LETISTE_PODLE_ID = {1: "Praha", 2: "Brno", 3: "Praha", 4: "Ostrava",
+                    5: "Pardubice", 6: "Katovice"}
+
+_ck_mapa = {}            # naučené ID -> jméno, drží se v ck.json
+_dohledano_za_beh = 0
+_aktualni_browser = None  # nastaví main(), aby šlo dohledat neznámou CK
+_hodina_behu = None       # hodina UTC, kvůli statistice změn cen
+
+
+def load_ck():
+    if not os.path.exists(CK_FILE):
+        return {}
+    try:
+        with open(CK_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"VAROVÁNÍ: {CK_FILE} nejde přečíst ({e}).")
+        return {}
+
+
+def save_ck(mapa):
+    try:
+        with open(CK_FILE, "w", encoding="utf-8") as f:
+            json.dump(mapa, f, ensure_ascii=False, indent=0, sort_keys=True)
+    except Exception as e:
+        print(f"VAROVÁNÍ: {CK_FILE} nejde zapsat ({e}).")
+
+
+def dekoduj_offer_id(url):
+    """
+    Rozbalí payload z parametru s_offer_id (JWT: hlavicka.payload.podpis).
+    Podpis NEOVĚŘUJEME - čteme jen veřejná data z odkazu, který nám web sám dal.
+    """
+    m = re.search(r"s_offer_id=([\w-]+)\.([\w-]+)", url or "")
+    if not m:
+        return None
+    cast = m.group(2)
+    cast += "=" * (-len(cast) % 4)   # base64url bez paddingu
+    try:
+        data = json.loads(base64.urlsafe_b64decode(cast))
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def _datum_z_payloadu(p, *klice):
+    """'20260723' nebo '20260723T0410' -> datetime.date."""
+    for k in klice:
+        v = p.get(k)
+        if isinstance(v, str) and len(v) >= 8 and v[:8].isdigit():
+            try:
+                return datetime.date(int(v[:4]), int(v[4:6]), int(v[6:8]))
+            except ValueError:
+                continue
+    return None
+
+
+def invia_detaily(url):
+    """
+    Vrátí slovník s údaji vyčtenými z odkazu Invie, nebo None.
+    Klíče: ck_id, ck_kod, od, do, noci, strava, letiste, cena.
+    """
+    p = dekoduj_offer_id(url)
+    if not p:
+        return None
+    od = _datum_z_payloadu(p, "checkInDate", "dateFrom",
+                           "outboundFlightDepartureDate")
+    do = _datum_z_payloadu(p, "checkOutDate", "dateTo")
+
+    noci = p.get("externalSourceNightsOfStay")
+    if not isinstance(noci, int) or noci <= 0:
+        if od and do and 0 < (do - od).days <= 60:
+            noci = (do - od).days
+        elif isinstance(p.get("daysCount"), int) and p["daysCount"] > 1:
+            # daysCount je počet DNÍ včetně obou krajních: 8 dní = 7 nocí.
+            # Ověřeno na záznamech, kde payload obsahuje obojí.
+            noci = p["daysCount"] - 1
+        else:
+            noci = None
+    if od and noci and not do:
+        do = od + datetime.timedelta(days=noci)
+
+    cena = None
+    try:
+        v = parse_qs(urlparse(url).query).get("c_price_unit", [None])[0]
+        if v is not None:
+            cena = round(float(v))
+    except (TypeError, ValueError):
+        cena = None
+
+    return {
+        "ck_id": p.get("tourOperatorId"),
+        "ck_kod": p.get("tourOperatorCode"),
+        "od": od,
+        "do": do,
+        "noci": noci,
+        "strava": STRAVA_PODLE_ID.get(p.get("mealId"), ""),
+        "letiste": LETISTE_PODLE_ID.get(
+            p.get("departureAirport") or p.get("airportId"), ""),
+        "cena": cena,
+    }
+
+
+def jmeno_ck(inv, link=""):
+    """
+    Jméno pořádající cestovky. Postup: naučená mapa (ck.json) -> ruční mapa
+    v tomto souboru -> kód z payloadu -> jednorázové dohledání v detailu
+    nabídky. Když nic nezabere, vrátí "CK #<id>", ať je v Telegramu aspoň
+    poznat, že jde o jiného pořadatele než u vedlejší nabídky.
+    """
+    global _dohledano_za_beh
+    if not inv or inv.get("ck_id") is None:
+        return ""
+    ck_id = inv["ck_id"]
+    klic = str(ck_id)
+    if _ck_mapa.get(klic):
+        return _ck_mapa[klic]
+    if klic in CK_PODLE_ID:
+        return CK_PODLE_ID[klic]
+    kod = str(inv.get("ck_kod") or "").upper()
+    if kod in CK_PODLE_KODU:
+        _ck_mapa[klic] = CK_PODLE_KODU[kod]
+        return _ck_mapa[klic]
+    if (DOHLEDAVAT_CK and _aktualni_browser is not None and link
+            and _dohledano_za_beh < MAX_DOHLEDANI_ZA_BEH):
+        _dohledano_za_beh += 1
+        jmeno = _dohledej_ck_v_detailu(link)
+        if jmeno:
+            _ck_mapa[klic] = jmeno
+            print(f"  Naučeno: CK id={ck_id} = {jmeno}")
+            return jmeno
+        print(f"  Neznámá CK id={ck_id} (kód {kod or '-'}) - jméno se nepodařilo "
+              f"zjistit, můžeš ho doplnit do {CK_FILE}.")
+    return f"CK #{ck_id}"
+
+
+def _dohledej_ck_v_detailu(link):
+    """Otevře detail nabídky a hledá v textu jméno pořádající cestovky."""
+    try:
+        page_html = fetch_rendered_html(_aktualni_browser, link)
+    except Exception as e:
+        print(f"  Detail nabídky se nepodařilo načíst: {e}")
+        return ""
+    text = BeautifulSoup(page_html, "html.parser").get_text(" ", strip=True)
+    m = re.search(r"(?:Pořadatel|Pořádající CK|Zájezd pořádá|Cestovní kancelář)"
+                  r"\s*:?\s*([A-ZÁ-Ž][\w.\-&\s]{2,40})", text)
+    if m:
+        return re.sub(r"\s+", " ", m.group(1)).strip(" .,-")[:40]
+    for jmeno in ZNAME_CK:
+        if re.search(r"\b" + re.escape(jmeno) + r"\b", text, re.IGNORECASE):
+            return jmeno
+    return ""
+
+
+def _obohat_kartu(card_text, inv):
+    """
+    Předřadí před text karty údaje z odkazu (termín, noci, strava, odlet).
+    Díky tomu je používají i extract_term / extract_nights / _strava_z_textu,
+    aniž bychom je museli měnit - a mají přednost, protože jsou na začátku.
+    POZOR: volat teprve PO výpočtu klíče nabídky.
+    """
+    if not inv:
+        return card_text
+    kusy = []
+    if inv.get("od") and inv.get("do"):
+        kusy.append(format_term((inv["od"], inv["do"])))
+    if inv.get("noci"):
+        kusy.append(f"{inv['noci']} nocí")
+    if inv.get("strava"):
+        kusy.append(inv["strava"])
+    if inv.get("letiste"):
+        kusy.append(f"odlet z {inv['letiste']}")
+    return (" ".join(kusy) + " " + card_text).strip() if kusy else card_text
+
+
+def _zapis_hodinu(stats):
+    """
+    Zaznamená hodinu (UTC), ve které bot zachytil změnu ceny. Po týdnu z
+    histogramu poznáš, kdy se ceny opravdu překlápí - a jestli má smysl
+    pouštět bota každou půlhodinu, nebo stačí méně často.
+    """
+    if _hodina_behu is None:
+        return
+    h = stats.setdefault("zmeny_po_hodinach", {})
+    klic = f"{_hodina_behu:02d}"
+    h[klic] = h.get(klic, 0) + 1
 
 
 def process_offer(source, source_label, base_url, seen, updates, stats, notify,
@@ -981,6 +1357,12 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
     # Filtr hotelového řetězce (Jaz) platí VŽDY - i na důvěryhodných URL.
     # Kontrolujeme text karty, NÁZEV (title) i URL odkazu, protože název
     # hotelu (např. "jaz-elite-riviera") bývá jen v odkazu, ne v textu karty.
+    # KLÍČ se počítá z NEZMĚNĚNÉHO textu karty (viz níže) - proto si ho
+    # schováme, ještě než text obohatíme údaji z odkazu Invie.
+    card_text_pro_klic = card_text
+    inv = invia_detaily(href) if source == "invia" else None
+    card_text = _obohat_kartu(card_text, inv)
+
     hotel_haystack = f"{card_text} {title} {href.replace('-', ' ')}"
     if not passes_hotel_filter(hotel_haystack):
         return 0
@@ -996,18 +1378,31 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
     if not passes_min_nights(card_text, href):
         return 0
 
+    # U Invie má přednost cena z odkazu (c_price_unit = za osobu v Kč).
+    # Je spolehlivější než louskání z textu karty - to je příčina toho,
+    # že třetina záznamů v seen.json má cenu 0.
     price = extract_price(card_text)
+    if inv and inv.get("cena"):
+        price = inv["cena"]
     if not passes_price_cap(price):
         return 0
 
     base_path = href.split("?")[0]
-    key = make_offer_key(source, base_path, card_text, title)
-    link = href if href.startswith("http") else base_url + href
+    # ZÁMĚRNĚ z card_text_pro_klic: klíče musí zůstat shodné s dosavadní
+    # seen.json, jinak by bot ohlásil všech 455 nabídek znovu jako nové.
+    key = make_offer_key(source, base_path, card_text_pro_klic, title)
+    ck = jmeno_ck(inv, href if href.startswith("http")
+                  else urljoin(base_url + "/", href))
+    # urljoin místo prostého sčítání řetězců: zvládne i odkazy začínající
+    # "//" (protokolově relativní) nebo "../". Prosté base_url + href by
+    # z nich udělalo neplatnou adresu, Telegram by tlačítko odmítl a celá
+    # zpráva by nedorazila.
+    link = href if href.startswith("http") else urljoin(base_url + "/", href)
     price_to_store = price if price is not None else 0
 
     if key not in seen and key not in updates:
         updates[key] = _pridej_meta(
-            {"ref": price_to_store, "min": price_to_store}, title, card_text, link)
+            {"ref": price_to_store, "min": price_to_store}, title, card_text, link, ck)
         stats_note_new(stats, price, title)
         if notify:
             if price:
@@ -1017,7 +1412,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
                 cena_radek = "\n💰 <i>cena neuvedena</i>"
             send_telegram(
                 f"🆕 <b>NOVÁ NABÍDKA</b>\n"
-                f"{zprava_detail(title, card_text, source_label, link)}"
+                f"{zprava_detail(title, card_text, source_label, link, ck)}"
                 f"{cena_radek}\n"
                 f"🌐 {source_label}",
                 link=link,
@@ -1039,11 +1434,12 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
             # jakmile celkový rozdíl překročí MIN_ZMENA_CENY. Historické
             # minimum si ale zapamatujeme i tak.
             updates[key] = _pridej_meta(
-                {"ref": old_ref, "min": new_min}, title, card_text, link)
+                {"ref": old_ref, "min": new_min}, title, card_text, link, ck)
             return 0
         updates[key] = _pridej_meta(
-            {"ref": price, "min": new_min}, title, card_text, link)
+            {"ref": price, "min": new_min}, title, card_text, link, ck)
         stats_note_discount(stats, sleva, price, title)
+        _zapis_hodinu(stats)
         if notify:
             badge = "\n🏆 <b>Rekordně nízká cena!</b>" if is_record else ""
             # Když to není rekord, ukážeme pro kontext dosavadní minimum -
@@ -1052,7 +1448,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
                          if old_min and not is_record else "")
             send_telegram(
                 f"🟢 <b>ZLEVNĚNÍ −{format_price(sleva)}</b>{badge}\n"
-                f"{zprava_detail(title, card_text, source_label, link)}\n"
+                f"{zprava_detail(title, card_text, source_label, link, ck)}\n"
                 f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>"
                 f"{_za_noc(price, card_text, link)}{min_radek}\n"
                 f"🌐 {source_label}",
@@ -1066,18 +1462,40 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
         if zdrazeni < MIN_ZMENA_CENY:
             # Drobný nárůst: nehlásíme, ref necháváme (nárůsty se sčítají).
             updates[key] = _pridej_meta(
-                {"ref": old_ref, "min": old_min if old_min else price},
-                title, card_text, link)
+                {"ref": old_ref, "min": _nove_minimum(old_min, old_ref, price)},
+                title, card_text, link, ck)
             return 0
         updates[key] = _pridej_meta(
-            {"ref": price, "min": old_min if old_min else price},
-            title, card_text, link)
+            {"ref": price, "min": _nove_minimum(old_min, old_ref, price)},
+            title, card_text, link, ck)
         stats["zdrazeni"] = stats.get("zdrazeni", 0) + 1
+        _zapis_hodinu(stats)
         if notify:
             send_telegram(
                 f"🔴 <b>ZDRAŽENÍ +{format_price(zdrazeni)}</b>\n"
-                f"{zprava_detail(title, card_text, source_label, link)}\n"
+                f"{zprava_detail(title, card_text, source_label, link, ck)}\n"
                 f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>"
+                f"{_za_noc(price, card_text, link)}\n"
+                f"🌐 {source_label}",
+                link=link,
+            )
+        return 1
+
+    # PRVNÍ ZNÁMÁ CENA (old_ref == 0): nabídka byla dřív uložena bez ceny
+    # (karta ji zrovna nevykreslila - v reálném seen.json je takových
+    # záznamů třetina). Dřív se cena jen TIŠE uložila a uživatel se ji
+    # nikdy nedozvěděl: první zpráva řekla "cena neuvedena" a druhá už
+    # nepřišla, protože porovnání `price < old_ref` s nulou nikdy neplatí.
+    # Teď cenu doplníme jednou zprávou.
+    if price and not old_ref:
+        updates[key] = _pridej_meta(
+            {"ref": price, "min": _nove_minimum(old_min, old_ref, price)},
+            title, card_text, link, ck)
+        if notify:
+            send_telegram(
+                f"💰 <b>DOPLNĚNA CENA</b>\n"
+                f"{zprava_detail(title, card_text, source_label, link, ck)}\n"
+                f"💰 <b>{format_price(price)}</b>"
                 f"{_za_noc(price, card_text, link)}\n"
                 f"🌐 {source_label}",
                 link=link,
@@ -1088,12 +1506,12 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
     # v tomto běhu - i bez ceny. Bez toho by hlídání zmizelých nabídek
     # falešně hlásilo zmizení u karet, které cenu zrovna neuvádějí.
     if price:
-        new_min = min(price, old_min) if old_min else price
         updates[key] = _pridej_meta(
-            {"ref": price, "min": new_min}, title, card_text, link)
+            {"ref": price, "min": _nove_minimum(old_min, old_ref, price)},
+            title, card_text, link, ck)
     else:
         updates[key] = _pridej_meta(
-            {"ref": old_ref, "min": old_min}, title, card_text, link)
+            {"ref": old_ref, "min": old_min}, title, card_text, link, ck)
     return 0
 
 
@@ -1386,8 +1804,6 @@ def _hotel_z_cesty(url):
 def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
                                 seen, updates, stats, notify, browser,
                                 fetcher=None):
-    if fetcher is None:
-        fetcher = fetch_rendered_html
     """
     Přímé stránky hotelů (model jako Invia Jaz hotely): z každé stránky
     se vytáhne hotel (ze slugu URL), termín "nejlepší nabídky", počet
@@ -1396,6 +1812,9 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
     (Čedok) -> "X Kč /os.". Bez nalezené ceny se nabídka nezakládá
     (ať nechodí prázdné zprávy) - jen se to zapíše do logu.
     """
+    global _karet_parsovano
+    if fetcher is None:
+        fetcher = fetch_rendered_html
     for url in urls:
         try:
             page_html = fetcher(browser, url)
@@ -1429,6 +1848,23 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
             if term:
                 term_txt = format_term(term)
                 noci = (term[1] - term[0]).days
+            # Na stránce hotelu bere extract_term PRVNÍ DVĚ data v textu -
+            # to ale mohou být data ze dvou různých termínů a vyjde nesmysl
+            # (v reálném seen.json takhle vzniklo několik "15 nocí" nabídek,
+            # které pak kvůli nízké ceně za noc ovládly denní digest).
+            # Když stránka uvádí počet nocí výslovně, věříme radši jí.
+            m_noc = re.search(r"(?<!\d)(\d{1,2})\s*noc", okno, re.IGNORECASE)
+            if m_noc:
+                explicitne = int(m_noc.group(1))
+                if noci is not None and explicitne != noci:
+                    print(f"  [{source_label}] délka pobytu se rozchází: "
+                          f"z datumů {noci}, v textu {explicitne} - beru text.")
+                noci = explicitne
+            # Pojistka proti zjevně nesmyslné délce (např. slepené termíny).
+            if noci is not None and not (1 <= noci <= MAX_NOCI_HOTEL_STRANKA):
+                print(f"  [{source_label}] nevěrohodná délka {noci} nocí "
+                      f"({url}) - beru jako neznámou.")
+                noci, term_txt = None, ""
 
         # Cena za osobu
         cena = None
@@ -1492,6 +1928,10 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
             odlet = f" odlet z {m.group(1)}"
 
         noci_txt = f" {noci} nocí" if noci else ""
+        # Hotelové stránky se dřív do počítadla karet NEPOČÍTALY. Když
+        # vypadly jen výpisové stránky (a hotelové běžely dál), počítadlo
+        # zůstalo pod 10 a hlídání zmizelých se zbytečně přeskočilo.
+        _karet_parsovano += 1
         card_text = f"{hotel} {term_txt}{noci_txt}{odlet} od {format_price(cena)}"
         found = process_offer(source, source_label, base_url,
                               seen, updates, stats, notify, url, hotel,
@@ -1713,7 +2153,11 @@ def check_dovolenkovani(seen, updates, stats, notify, browser):
 def main():
     # Řádkové flushování stdout - v GitHub Actions je jinak výstup vidět až
     # na konci běhu a nejde sledovat průběh ani poznat, kde běh visí.
-    sys.stdout.reconfigure(line_buffering=True)
+    # hasattr: reconfigure() má jen skutečný textový stream. Když je stdout
+    # přesměrovaný (obal v CI, přesměrování do souboru přes jiný objekt),
+    # bez téhle pojistky by skript spadl hned na prvním řádku.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
 
     seen = load_seen()
     # První běh = soubor neexistuje NEBO se nepodařilo nic načíst (poškozený
@@ -1722,7 +2166,13 @@ def main():
     first_run = not os.path.exists(SEEN_FILE) or not seen
     updates = {}
 
+    # Naučená mapa "ID cestovky -> jméno". Drží se mezi běhy v ck.json,
+    # takže detail nabídky se kvůli jménu otevírá jen u nové cestovky.
+    global _ck_mapa, _hodina_behu, _aktualni_browser
+    _ck_mapa = load_ck()
+
     now = datetime.datetime.now(datetime.timezone.utc)
+    _hodina_behu = now.hour
     iso = now.isocalendar()
     current_week = f"{iso[0]}-W{iso[1]:02d}"
     stats = load_stats(current_week)
@@ -1731,13 +2181,19 @@ def main():
     if stats.get("week") != current_week:
         if not first_run:
             send_weekly_summary(stats)
+        # digest_date přenášíme přes přelom týdne - jinak by se v neděli
+        # večer / v pondělí ráno mohl denní digest odeslat dvakrát.
+        posledni_digest = stats.get("digest_date")
         stats = default_stats(current_week)
+        if posledni_digest:
+            stats["digest_date"] = posledni_digest
 
     if first_run:
         print("První spuštění – ukládám aktuální nabídky, ale zprávy zatím neposílám.")
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
+        _aktualni_browser = browser   # kvůli dohledání jména neznámé CK
         try:
             # Každý zdroj běží samostatně - pád jednoho nezastaví ostatní.
             zdroje = [
@@ -1754,27 +2210,39 @@ def main():
                 except Exception as e:
                     print(f"CHYBA zdroje {nazev} (pokračuji dalšími): {e}")
         finally:
+            _aktualni_browser = None
             browser.close()
 
     today_str = now.date().isoformat()
 
-    # Hlídání zmizelých nabídek - MUSÍ běžet PŘED seen.update(updates),
-    # aby šlo rozlišit "viděno v tomto běhu" (updates) od "nepřišlo" (seen).
-    if not first_run:
-        hlidej_zmizele(seen, updates, today_str)
+    try:
+        # Hlídání zmizelých nabídek - MUSÍ běžet PŘED seen.update(updates),
+        # aby šlo rozlišit "viděno v tomto běhu" (updates) od "nepřišlo" (seen).
+        if not first_run:
+            hlidej_zmizele(seen, updates, today_str)
+    except Exception as e:
+        print(f"CHYBA při hlídání zmizelých (pokračuji): {e}")
 
     seen.update(updates)
     seen = prune_seen(seen, updates, today_str)
-    save_seen(seen)
+    save_seen(seen)   # stav uložíme HNED, ať ho nezhatí chyba v digestu
 
-    # Denní digest: jednou denně v nastavenou hodinu TOP 5 za noc.
-    if (DENNI_DIGEST and not first_run
-            and now.hour == DIGEST_HODINA_UTC
-            and stats.get("digest_date") != today_str):
-        send_daily_digest(seen, today_str)
-        stats["digest_date"] = today_str
+    # Denní digest: jednou denně TOP 5 za noc.
+    # Dřív podmínka zněla `now.hour == DIGEST_HODINA_UTC` - jenže naplánované
+    # běhy GitHub Actions se běžně zpožďují nebo se úplně přeskakují, a když
+    # ta jedna hodina vypadla, digest ten den nepřišel vůbec. Teď ho pošle
+    # PRVNÍ běh v daný den, který nastane v tu hodinu nebo později.
+    try:
+        if (DENNI_DIGEST and not first_run
+                and now.hour >= DIGEST_HODINA_UTC
+                and stats.get("digest_date") != today_str):
+            send_daily_digest(seen, today_str)
+            stats["digest_date"] = today_str
+    except Exception as e:
+        print(f"CHYBA při denním digestu (pokračuji): {e}")
 
     save_stats(stats)
+    save_ck(_ck_mapa)
     if updates:
         print(f"Zpracováno {len(updates)} nových/aktualizovaných nabídek.")
     else:
