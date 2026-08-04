@@ -25,6 +25,9 @@ jobs:
     # zaseknutý běh tak mohl zablokovat frontu na hodiny, protože další
     # běhy kvůli concurrency čekají. 25 minut = zaseknutý běh se ukončí
     # dřív, než přijde ten následující.
+    # Bot si sám hlídá kratší rozpočet (CASOVY_ROZPOCET_MINUT) a před jeho
+    # vypršením se korektně ukončí včetně uložení stavu. Tenhle timeout je
+    # jen tvrdá pojistka, musí být VYŠŠÍ než rozpočet bota.
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -54,13 +57,23 @@ jobs:
       # Cache Chromu (~150 MB) - bez ní se stahuje každý běh (~1 min).
       - name: Cache Playwright browsers
         id: pw-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
       - name: Install Playwright Chromium
         run: playwright install --with-deps chromium
+
+      # Cache se ukládá až v post-job kroku, který se po zabití běhu
+      # neprovede - Chrome (300 MB) by se pak stahoval pořád dokola.
+      # Uložíme ho hned po instalaci, ještě než se pustí bot.
+      - name: Save Playwright cache
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.pw-cache.outputs.cache-primary-key }}
 
       - name: Run bot
         env:
@@ -77,7 +90,12 @@ jobs:
         run: |
           git config user.name "lastminute-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add seen.json stats.json ck.json || true
+          # POZOR: "git add a.json b.json c.json" je ATOMICKÝ - když jeden
+          # soubor neexistuje (ck.json vzniká až prvním během), git
+          # nepřidá ANI JEDEN a stav se tiše ztratí. Proto po jednom.
+          for f in seen.json stats.json ck.json; do
+            if [ -f "$f" ]; then git add "$f"; fi
+          done
           if git diff --cached --quiet; then
             echo "Žádná změna stavu."
           else
