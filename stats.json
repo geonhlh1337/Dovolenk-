@@ -1,14 +1,19 @@
 {
 "week": "2026-W32",
-"novych": 53,
-"zlevneni": 13,
-"zdrazeni": 34,
+"novych": 60,
+"zlevneni": 16,
+"zdrazeni": 39,
 "nejvetsi_sleva": {
-"castka": 7580,
-"titulek": "Jaz Elite Asteria Egypt / Hurghada / Sahl Hasheesh 18. 11. (st) / 7 nocí / Brno All Inclusive Celkem za všechny 41 760 Kč"
+"castka": 10545,
+"titulek": "Jaz Costa Mares"
 },
 "nejlevnejsi": {
 "cena": 10499,
 "titulek": "Jaz Mirabel Park Club"
-}
+},
+"zmeny_po_hodinach": {
+"21": 8
+},
+"zdroj_start": 1,
+"digest_date": "2026-08-04"
 }
