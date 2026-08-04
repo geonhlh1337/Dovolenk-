@@ -139,7 +139,7 @@ finally:
 # ---------------- process_offer ----------------
 poslano = []
 B._orig_send = B.send_telegram
-B.send_telegram = lambda text, link=None: poslano.append(text)
+B.send_telegram = lambda text, link=None, tise=False: poslano.append(text)
 
 seen, updates, stats = {}, {}, B.default_stats("2026-W31")
 card = "Jaz Aquamarine Resort Hurghada 15. 7. 2026 - 22. 7. 2026 All inclusive odlet z Prahy od 20 000 Kč"
@@ -322,7 +322,7 @@ finally:
 # urljoin
 if "urljoin" in open(MODUL + ".py", encoding="utf-8").read():
     poslano2 = []
-    B.send_telegram = lambda text, link=None: poslano2.append(link)
+    B.send_telegram = lambda text, link=None, tise=False: poslano2.append(link)
     s3, u3 = {}, {}
     B.process_offer("invia", "Invia", "https://www.invia.cz", s3, u3,
                     B.default_stats("2026-W31"), True,
@@ -338,7 +338,7 @@ B.send_telegram = B._orig_send
 # ============ TESTY DAT Z ODKAZŮ INVIE ============
 if hasattr(B, "invia_detaily"):
     # znovu odchytit zpravy - predchozi blok vratil originalni send_telegram
-    B.send_telegram = lambda text, link=None: poslano.append(text)
+    B.send_telegram = lambda text, link=None, tise=False: poslano.append(text)
     REAL = ("https://www.invia.cz/hotel/egypt/sharm-el-sheikh/jaz-sharm-dreams/"
             "zajezd/?s_offer_id=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9."
             "eyJwcm92aWRlclByZWZpeCI6IlRUIiwib2ZmZXJJZCI6IlgiLCJ0b3VyT3BlcmF0"
@@ -428,14 +428,14 @@ if hasattr(B, "invia_detaily"):
     check("zlevneni z odkazu ohlaseno", len(poslano), 1)
     check("hodina zapsana do statistiky", st7["zmeny_po_hodinach"], {"09": 1})
     _o = B.send_telegram; zpr7 = []
-    B.send_telegram = lambda t, link=None: zpr7.append(t)
+    B.send_telegram = lambda t, link=None, tise=False: zpr7.append(t)
     B.send_weekly_summary(st7)
     B.send_telegram = _o
     check_true("souhrn ukazuje hodiny zmen", zpr7 and "09:00 UTC" in zpr7[0])
 
     # digest a zmizeni ukazuji cestovku
     zpr8 = []
-    B.send_telegram = lambda t, link=None: zpr8.append(t)
+    B.send_telegram = lambda t, link=None, tise=False: zpr8.append(t)
     B.send_daily_digest({"a": {"ref": 14000, "n": 7, "t": "Jaz A",
                               "d": "2026-07-29", "u": "https://a",
                               "ck": "Alltours"}}, "2026-07-29")
@@ -447,6 +447,92 @@ if hasattr(B, "invia_detaily"):
     B.hlidej_zmizele(sz, {}, "2026-07-29")
     check_true("zmizeni ukazuje cestovku", zpr8 and "Čedok" in zpr8[0])
     B.send_telegram = _o
+
+
+
+# ============ TESTY ČASOVÉHO ROZPOČTU A ODOLNOSTI ZDROJŮ ============
+if hasattr(B, "dosel_cas"):
+    B.send_telegram = lambda text, link=None, tise=False: poslano.append(text)
+
+    # rozpočet
+    B._zacatek_behu = B.time.monotonic()
+    B._rozpocet_hlaseno = False
+    check("rozpocet: na zacatku je cas", B.dosel_cas(), False)
+    B._zacatek_behu = B.time.monotonic() - (B.CASOVY_ROZPOCET_MINUT * 60 + 1)
+    check("rozpocet: po vyprseni dosel", B.dosel_cas(), True)
+    B._zacatek_behu = B.time.monotonic()
+    B._rozpocet_hlaseno = False
+
+    # pojistka proti mrtvemu zdroji
+    B._chyby_zdroje = 0
+    try:
+        B._zaznamenej_chybu_zdroje("Test", "https://x", "timeout")
+        prvni_ok = True
+    except B.ZdrojSeVzdal:
+        prvni_ok = False
+    check("pojistka: prvni chyba jeste nevzdava", prvni_ok, True)
+    try:
+        B._zaznamenej_chybu_zdroje("Test", "https://x", "timeout")
+        check("pojistka: druha chyba vzda zdroj", False, True)
+    except B.ZdrojSeVzdal:
+        check("pojistka: druha chyba vzda zdroj", True, True)
+    B._chyby_zdroje = 0
+    B._uspech_zdroje()
+    check("pojistka: uspech nuluje citac", B._chyby_zdroje, 0)
+
+    # ZMIZENÍ jen u zdrojů, které v běhu odpověděly
+    poslano.clear()
+    B._karet_parsovano = 100
+    sz = {
+        "invia:a": {"ref": 1, "min": 1, "d": "2026-08-03", "t": "Jaz A",
+                    "miss": B.ZMIZENI_PO_BEZICH - 1},
+        "eximtours:b": {"ref": 1, "min": 1, "d": "2026-08-03", "t": "Jaz B",
+                        "miss": B.ZMIZENI_PO_BEZICH - 1},
+    }
+    B._zdroje_ok = {"invia"}          # Exim tento běh spadl na timeout
+    B.hlidej_zmizele(sz, {}, "2026-08-04")
+    check("zmizeni: ohlaseno u funkcniho zdroje", len(poslano), 1)
+    check_true("zmizeni: jde o Invii", poslano and "Jaz A" in poslano[0])
+    check("zmizeni: NEohlaseno u spadleho zdroje",
+          sz["eximtours:b"].get("gone"), None)
+    check("zmizeni: spadlemu zdroji se nezvysil citac",
+          sz["eximtours:b"]["miss"], B.ZMIZENI_PO_BEZICH - 1)
+
+    poslano.clear()
+    B._zdroje_ok = set()               # nic neproslo
+    sz2 = {"invia:c": {"ref": 1, "min": 1, "d": "2026-08-03", "t": "Jaz C",
+                       "miss": B.ZMIZENI_PO_BEZICH - 1}}
+    B.hlidej_zmizele(sz2, {}, "2026-08-04")
+    check("zmizeni: zadny zdroj neprosel = ticho", len(poslano), 0)
+
+    # process_offer registruje zdroj jako funkcni
+    B._zdroje_ok = set()
+    B.process_offer("cedok", "Čedok", "https://www.cedok.cz", {}, {},
+                    B.default_stats("2026-W31"), False,
+                    "/dovolena/x/hotel-jaz-y,M1/", "Jaz Y",
+                    "Jaz Y 15. 7. 2026 - 22. 7. 2026 z Prahy od 20 000 Kč")
+    check("zdroj se zaregistroval jako funkcni", B._zdroje_ok, {"cedok"})
+
+    # rotace zdroju
+    st_r = B.default_stats("2026-W31")
+    check("rotace: vychozi start", st_r.get("zdroj_start"), 0)
+    poradi = []
+    zdroje = [("A", None), ("B", None), ("C", None)]
+    for _ in range(4):
+        start = st_r.get("zdroj_start", 0) % len(zdroje)
+        poradi.append([z[0] for z in (zdroje[start:] + zdroje[:start])][0])
+        st_r["zdroj_start"] = (start + 1) % len(zdroje)
+    check("rotace: kazdy beh zacina jinym zdrojem", poradi, ["A", "B", "C", "A"])
+
+    # tiche zpravy
+    zachyt = {}
+    _rq = B.requests.post
+    B.requests.post = lambda url, data=None, timeout=None: (
+        zachyt.update(data or {}) or type("R", (), {"ok": True, "status_code": 200})())
+    B._telegram_post("test", tise=True)
+    check("ticha zprava nastavi disable_notification",
+          zachyt.get("disable_notification"), True)
+    B.requests.post = _rq
 
 print(f"\n{'='*60}\nCELKEM PROŠLO: {OK}   NEPROŠLO: {FAIL}\n{'='*60}")
 for f in FAILS:
