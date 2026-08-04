@@ -1,3 +1,5 @@
+# Verze připnuté na hlavní řadu: bot běží bez dozoru 48x denně, takže
+# nechceme, aby ho jednoho rána shodila nová major verze knihovny.
 requests>=2.32,<3
 beautifulsoup4>=4.12,<5
 playwright>=1.49,<2
