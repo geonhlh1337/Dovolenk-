@@ -11,7 +11,8 @@ zájezdy do hotelů řetězce **Jaz** v Egyptě a posílá zprávy na Telegram.
 | 💰 **DOPLNĚNA CENA** | u nabídky, která dřív cenu neuváděla, se cena objevila |
 | 🟢 **ZLEVNĚNÍ** | pokles ceny aspoň o `MIN_ZMENA_CENY` (+ 🏆 když je to historické minimum) |
 | 🔴 **ZDRAŽENÍ** | nárůst ceny aspoň o `MIN_ZMENA_CENY` (vypnutelné) |
-| ⌛ **NABÍDKA ZMIZELA** | nabídka se neobjevila `ZMIZENI_PO_BEZICH` běhů po sobě |
+| ⌛ **NABÍDKA ZMIZELA** | nabídka se neobjevila `ZMIZENI_PO_BEZICH` běhů po sobě (tiše) |
+| ⚠️ **Zdroj nevrátil nabídky** | web nereagoval nebo se vzdal po chybách (tiše) |
 | 🌅 **Ranní přehled** | jednou denně TOP 5 nejlevnějších Jaz podle ceny za noc |
 | 📊 **Týdenní přehled** | při přelomu kalendářního týdne |
 
@@ -75,6 +76,12 @@ Vše je nahoře v `lastminute_bot.py`:
 - `MAX_ZPRAV_ZA_BEH` – pojistka proti záplavě zpráv
 - `DENNI_DIGEST`, `DIGEST_HODINA_UTC` – ranní přehled
 - `OZNAMOVAT_ZMIZENI`, `ZMIZENI_PO_BEZICH`, `MIN_KARET_PRO_ZMIZENI`
+- `CASOVY_ROZPOCET_MINUT` – po vyčerpání bot přestane načítat další
+  stránky a korektně doběhne. **Musí být nižší než `timeout-minutes`
+  ve workflow**, jinak runner běh zabije a stav se ztratí.
+- `MAX_CHYB_ZDROJE` – po kolika chybách za sebou se zdroj v běhu vzdá
+- `NACTENI_TIMEOUT_MS`, `NACTENI_POKUSU` – načítání jedné stránky
+- `INVIA_MAX_STRANEK` – kolik stránek výsledků projít
 - `DIAGNOSTIKA_ODKAZU` – vypíše do logu nalezené odkazy (na doladění vzorů)
 - `DOHLEDAVAT_CK`, `MAX_DOHLEDANI_ZA_BEH` – dohledávání jména neznámé
   cestovky otevřením detailu nabídky (výsledek se uloží do `ck.json`)
@@ -117,6 +124,18 @@ sám měří, ve kterou hodinu (UTC) změny zachytil, a v týdenním přehledu
 ukáže tři nejaktivnější hodiny (`zmeny_po_hodinach` v `stats.json`).
 Po dvou třech týdnech z toho poznáš, jestli má běh každou půlhodinu smysl.
 
+## Když se běh nestíhá
+
+Jeden úplný běh trvá zhruba 20–25 minut (nejdražší jsou hotelové stránky
+Invie, ~30 s každá). Když bot vyčerpá `CASOVY_ROZPOCET_MINUT`, zbytek
+přeskočí – ale **pořadí zdrojů se každý běh posune o jedna**, takže se
+nikdo trvale nevynechá. Zdroje, které v daném běhu neodpověděly, se
+navíc nezapočítávají do hlídání zmizelých nabídek.
+
+Když chceš stihnout víc, jde snížit `INVIA_MAX_STRANEK` nebo ubrat
+vyhledávací URL a spolehnout se na hotelové stránky – ty vracejí
+prakticky všechny změny.
+
 ## Když přestanou chodit zprávy
 
 Podívej se do logu běhu v záložce *Actions*. Klíčový je řádek u každého zdroje:
@@ -126,4 +145,3 @@ Podívej se do logu běhu v záložce *Actions*. Klíčový je řádek u každé
   `DIAGNOSTIKA_ODKAZU = True` a z vypsaných odkazů uprav `detail_pattern`
 - `cena nenalezena, přeskakuji` – u hotelové stránky se nepodařilo přečíst
   cenu; log rovnou vypíše, kolikrát je na stránce „Kč" a jak vypadá začátek textu
-
