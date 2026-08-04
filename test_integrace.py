@@ -109,8 +109,8 @@ def fake_fetch(browser, url):
 def spust_beh():
     ZPRAVY.clear()
     importlib.reload(B)
-    B.send_telegram = lambda text, link=None: ZPRAVY.append(text)
-    B._telegram_post = lambda text, link=None: ZPRAVY.append(text)
+    B.send_telegram = lambda text, link=None, tise=False: ZPRAVY.append(text)
+    B._telegram_post = lambda text, link=None, tise=False: ZPRAVY.append(text)
     B.fetch_rendered_html = fake_fetch
     B.fetch_cedok_html = fake_fetch
     B.sync_playwright = lambda: FakePlaywright()
