@@ -1,5 +1,4 @@
 # Ulož jako .github/workflows/lastminute.yml
-# Pokud se tvůj skript jmenuje jinak než lastminute_bot.py, uprav poslední krok.
 name: Last minute bot
 
 on:
@@ -22,9 +21,18 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 100  # pojistka proti visícímu prohlížeči
+    # ZMĚNA: 100 minut bylo víc, než je perioda spouštění (30 min). Jeden
+    # zaseknutý běh tak mohl zablokovat frontu na hodiny, protože další
+    # běhy kvůli concurrency čekají. 25 minut = zaseknutý běh se ukončí
+    # dřív, než přijde ten následující.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          # ZMĚNA: "git pull --rebase" v posledním kroku potřebuje historii.
+          # S výchozí mělkou kopií (depth 1) rebase občas selže a push
+          # neprojde - stav se pak neuloží.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -34,6 +42,14 @@ jobs:
 
       - name: Install Python deps
         run: pip install -r requirements.txt
+
+      # ZMĚNA: rychlá kontrola, že se skript vůbec načte a projde testy.
+      # Chytí překlep dřív, než se rozjede 10 minut scrapování.
+      - name: Self-test
+        run: |
+          python -m compileall -q lastminute_bot.py
+          TELEGRAM_BOT_TOKEN=test TELEGRAM_CHAT_ID=test python test_bot.py
+          TELEGRAM_BOT_TOKEN=test TELEGRAM_CHAT_ID=test python test_integrace.py
 
       # Cache Chromu (~150 MB) - bez ní se stahuje každý běh (~1 min).
       - name: Cache Playwright browsers
@@ -52,17 +68,24 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python lastminute_bot.py
 
-      # Uložení paměti bota zpět do repa. Pull --rebase řeší situaci, kdy
-      # mezitím někdo (nebo jiný běh) pushnul - jinak by push spadl.
+      # Uložení paměti bota zpět do repa.
+      # ZMĚNA: if: always() - když bot spadne uprostřed, dřív se tenhle krok
+      # vůbec nespustil a rozpracovaný stav se zahodil. Další běh pak poslal
+      # už jednou ohlášené nabídky znovu. Teď se uloží, co se stihlo.
       - name: Commit state
+        if: always()
         run: |
           git config user.name "lastminute-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add seen.json stats.json
+          git add seen.json stats.json ck.json || true
           if git diff --cached --quiet; then
             echo "Žádná změna stavu."
           else
             git commit -m "chore: update bot state [skip ci]"
-            git pull --rebase
-            git push
+            # Několik pokusů: mezitím mohl pushnout někdo jiný.
+            for i in 1 2 3; do
+              git pull --rebase && git push && break
+              echo "Push pokus $i selhal, zkouším znovu..."
+              sleep 5
+            done
           fi
