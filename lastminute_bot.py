@@ -144,6 +144,24 @@ ZMIZENI_PO_BEZICH = 3
 # poznat proč. Teď je to vidět a jde to změnit.
 MIN_KARET_PRO_ZMIZENI = 10
 
+# ---- Časový rozpočet běhu ----
+# GitHub Actions job zabije po `timeout-minutes`. Když k tomu dojde uprostřed
+# scrapování, PŘIJDE SE O CELÝ STAV - bot se nikdy nedostane k save_seen()
+# a další běh pak hlásí už jednou ohlášené nabídky znovu.
+# Proto si bot hlídá vlastní, kratší lhůtu: jakmile ji překročí, přestane
+# načítat další stránky a normálně doběhne (uloží stav, pošle souhrny).
+# Nech tuhle hodnotu ASPOŇ O 5 MINUT NIŽŠÍ než timeout-minutes ve workflow.
+CASOVY_ROZPOCET_MINUT = 18
+
+# Po kolika po sobě jdoucích chybách se zdroj v tomto běhu vzdá.
+# Exim Tours dokázal jedním během spálit 18 minut na samých timeoutech
+# (3 URL x 2 pokusy x 45 s) a nezbyl čas na nic jiného.
+MAX_CHYB_ZDROJE = 2
+
+# Timeout jednoho načtení stránky (ms) a počet pokusů.
+NACTENI_TIMEOUT_MS = 25000
+NACTENI_POKUSU = 2
+
 # Denní digest: jedna ranní zpráva s TOP 5 nejlevnějšími Jaz nabídkami
 # přepočtenými na cenu za NOC (z nabídek viděných tentýž den; každý hotel
 # nejvýš jednou). Hodina je v UTC: 5 UTC = 7:00 letního / 6:00 zimního
@@ -409,6 +427,8 @@ def default_stats(week):
         # Ceny na Invii se mění dynamicky a pevný rozvrh neexistuje, takže
         # tohle je jediný způsob, jak zjistit, kdy se mění TVÉ nabídky.
         "zmeny_po_hodinach": {},
+        # index zdroje, kterým začne příští běh (rotace, ať nikdo nehladoví)
+        "zdroj_start": 0,
     }
 
 
@@ -437,6 +457,8 @@ def load_stats(current_week):
         v = data.get(k)
         if isinstance(v, dict) and isinstance(v.get(podklic), int):
             stats[k] = {podklic: v[podklic], "titulek": str(v.get("titulek", ""))}
+    if isinstance(data.get("zdroj_start"), int):
+        stats["zdroj_start"] = data["zdroj_start"]
     h = data.get("zmeny_po_hodinach")
     if isinstance(h, dict):
         stats["zmeny_po_hodinach"] = {str(k): v for k, v in h.items()
@@ -456,24 +478,29 @@ _poslano_zprav = 0
 _potlaceno_zprav = 0
 
 
-def send_telegram(text, link=None):
-    """Pošle zprávu, ale nejvýš MAX_ZPRAV_ZA_BEH za jeden běh (pojistka)."""
+def send_telegram(text, link=None, tise=False):
+    """
+    Pošle zprávu, ale nejvýš MAX_ZPRAV_ZA_BEH za jeden běh (pojistka).
+    tise=True pošle zprávu bez zvuku/vibrace - hodí se na informace,
+    kvůli kterým nemá smysl budit telefon (zdražení, zmizelá nabídka).
+    """
     global _poslano_zprav, _potlaceno_zprav
     if _poslano_zprav >= MAX_ZPRAV_ZA_BEH:
         _potlaceno_zprav += 1
         print(f"Zpráva POTLAČENA (limit {MAX_ZPRAV_ZA_BEH}/běh): {text[:80]!r}")
         return
     _poslano_zprav += 1
-    _telegram_post(text, link)
+    _telegram_post(text, link, tise)
 
 
-def _telegram_post(text, link=None):
+def _telegram_post(text, link=None, tise=False):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
         "text": text,
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
+        "disable_notification": tise,
     }
     if link:
         payload["reply_markup"] = json.dumps({
@@ -507,6 +534,52 @@ def _telegram_post(text, link=None):
     except Exception as e:
         print("Telegram nedostupný (pokračuji dál):", e)
     time.sleep(4)  # limit ~20 zpráv/min do jednoho chatu
+
+
+# Prefixy zdrojů (klíč v seen.json je "invia:...", "cedok:..."), které
+# tento běh opravdu úspěšně prošel. Jen u nich smí bot počítat, že nabídka
+# "nepřišla" - jinak by výpadek Eximu hlásil zmizení všech jeho nabídek.
+_zdroje_ok = set()
+
+_zacatek_behu = time.monotonic()
+_rozpocet_hlaseno = False
+_chyby_zdroje = 0
+
+
+def dosel_cas():
+    """
+    True, když běh překročil svůj časový rozpočet. Volá se před načtením
+    každé další stránky - zbytek se přeskočí a bot normálně doběhne
+    (uloží seen.json, stats.json a pošle, co má), místo aby ho v půlce
+    zabil runner a stav se ztratil.
+    """
+    global _rozpocet_hlaseno
+    if time.monotonic() - _zacatek_behu < CASOVY_ROZPOCET_MINUT * 60:
+        return False
+    if not _rozpocet_hlaseno:
+        _rozpocet_hlaseno = True
+        print(f"⏱ Vyčerpán časový rozpočet {CASOVY_ROZPOCET_MINUT} min – "
+              f"přeskakuji zbývající stránky a ukládám stav.")
+    return True
+
+
+class ZdrojSeVzdal(Exception):
+    """Zdroj nasbíral moc chyb za sebou; přeskočíme jeho zbytek."""
+
+
+def _zaznamenej_chybu_zdroje(nazev, url, chyba):
+    global _chyby_zdroje
+    _chyby_zdroje += 1
+    print(f"  {nazev} chyba ({url[:70]}): {chyba}")
+    if _chyby_zdroje >= MAX_CHYB_ZDROJE:
+        raise ZdrojSeVzdal(
+            f"{MAX_CHYB_ZDROJE}x po sobě neodpověděl – přeskakuji zbytek "
+            f"zdroje v tomto běhu")
+
+
+def _uspech_zdroje():
+    global _chyby_zdroje
+    _chyby_zdroje = 0
 
 
 def short_hash(text):
@@ -1017,9 +1090,22 @@ def hlidej_zmizele(seen, updates, today_str):
         print(f"Jen {_karet_parsovano} karet za běh (min. {MIN_KARET_PRO_ZMIZENI}) "
               f"- hlídání zmizelých přeskočeno.")
         return
+    if not _zdroje_ok:
+        print("Žádný zdroj neproběhl úspěšně - hlídání zmizelých přeskočeno.")
+        return
     dnes = datetime.date.fromisoformat(today_str)
+    preskoceno = 0
     for k, v in seen.items():
         if k in updates or v.get("gone"):
+            continue
+        # KLÍČOVÉ: nabídku smíme označit za nezvěstnou jen tehdy, když její
+        # zdroj v TOMTO běhu opravdu odpověděl. Když Exim spadne na timeout
+        # nebo se nestihne kvůli časovému rozpočtu, jeho nabídky prostě
+        # "nepřišly" - a bez téhle podmínky by po pár takových bězích
+        # dorazila vlna falešných ⌛ zpráv. (V dosavadní seen.json mělo
+        # příznak gone 274 z 455 záznamů, tohle je nejspíš hlavní příčina.)
+        if k.split(":")[0] not in _zdroje_ok:
+            preskoceno += 1
             continue
         d = v.get("d")
         try:
@@ -1044,8 +1130,11 @@ def hlidej_zmizele(seen, updates, today_str):
                 f"{cena}\n"
                 f"<i>Neobjevila se {ZMIZENI_PO_BEZICH}× po sobě – "
                 f"nejspíš vyprodáno nebo stažena.</i>",
-                link=v.get("u"),
+                link=v.get("u"), tise=True,
             )
+    if preskoceno:
+        print(f"Hlídání zmizelých: {preskoceno} nabídek přeskočeno "
+              f"(jejich zdroj v tomto běhu neodpověděl).")
 
 
 def send_daily_digest(seen, today_str):
@@ -1287,8 +1376,11 @@ def jmeno_ck(inv, link=""):
     if kod in CK_PODLE_KODU:
         _ck_mapa[klic] = CK_PODLE_KODU[kod]
         return _ck_mapa[klic]
+    # Dohledání otevírá další stránku (~30 s), takže když dochází čas,
+    # jméno raději necháme na příští běh - stav je důležitější.
     if (DOHLEDAVAT_CK and _aktualni_browser is not None and link
-            and _dohledano_za_beh < MAX_DOHLEDANI_ZA_BEH):
+            and _dohledano_za_beh < MAX_DOHLEDANI_ZA_BEH
+            and not dosel_cas()):
         _dohledano_za_beh += 1
         jmeno = _dohledej_ck_v_detailu(link)
         if jmeno:
@@ -1360,6 +1452,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
     # KLÍČ se počítá z NEZMĚNĚNÉHO textu karty (viz níže) - proto si ho
     # schováme, ještě než text obohatíme údaji z odkazu Invie.
     card_text_pro_klic = card_text
+    _zdroje_ok.add(source)   # zdroj prokazatelně odpověděl nabídkami
     inv = invia_detaily(href) if source == "invia" else None
     card_text = _obohat_kartu(card_text, inv)
 
@@ -1477,7 +1570,7 @@ def process_offer(source, source_label, base_url, seen, updates, stats, notify,
                 f"💰 <s>{format_price(old_ref)}</s> → <b>{format_price(price)}</b>"
                 f"{_za_noc(price, card_text, link)}\n"
                 f"🌐 {source_label}",
-                link=link,
+                link=link, tise=True,   # zdražení nemá budit telefon
             )
         return 1
 
@@ -1542,9 +1635,10 @@ def fetch_rendered_html(browser, url):
         # dáme JS čas nabídky dopočítat.
         # goto zkoušíme 2x - pomalé weby občas první pokus nestihnou.
         posledni = None
-        for pokus in range(2):
+        for pokus in range(NACTENI_POKUSU):
             try:
-                page.goto(url, timeout=45000, wait_until="domcontentloaded")
+                page.goto(url, timeout=NACTENI_TIMEOUT_MS,
+                          wait_until="domcontentloaded")
                 posledni = None
                 break
             except Exception as e:
@@ -1594,6 +1688,7 @@ def fetch_rendered_html(browser, url):
                 page.wait_for_timeout(1500)
         if html is None:
             raise last_error
+        _uspech_zdroje()
     finally:
         page.close()
     return html
@@ -1713,6 +1808,8 @@ def check_invia(seen, updates, stats, notify, browser):
 
     # 1) Vyhledávací a last-minute stránky (se stránkováním u vyhledávacích)
     for url in INVIA_SEARCH_URLS:
+        if dosel_cas():
+            break
         max_stranek = INVIA_MAX_STRANEK if _je_vyhledavaci_url(url) else 1
         found_celkem = 0
         karet_celkem = 0
@@ -1721,7 +1818,7 @@ def check_invia(seen, updates, stats, notify, browser):
             try:
                 page_html = fetch_rendered_html(browser, page_url)
             except Exception as e:
-                print(f"Invia chyba ({page_url}): {e}")
+                _zaznamenej_chybu_zdroje("Invia", page_url, e)
                 break
             soup = BeautifulSoup(page_html, "html.parser")
             if page == 1:
@@ -1749,7 +1846,7 @@ def check_invia(seen, updates, stats, notify, browser):
         try:
             page_html = fetch_rendered_html(browser, url)
         except Exception as e:
-            print(f"Invia Jaz hotel chyba ({url}): {e}")
+            _zaznamenej_chybu_zdroje("Invia Jaz hotel", url, e)
             continue
         soup = BeautifulSoup(page_html, "html.parser")
         found = 0
@@ -1775,7 +1872,7 @@ def check_bluestyle(seen, updates, stats, notify, browser):
         try:
             page_html = fetch_rendered_html(browser, url)
         except Exception as e:
-            print(f"Blue Style chyba ({url}): {e}")
+            _zaznamenej_chybu_zdroje("Blue Style", url, e)
             continue
         soup = BeautifulSoup(page_html, "html.parser")
         found = 0
@@ -1816,10 +1913,12 @@ def zkontroluj_hotelove_stranky(source, source_label, base_url, urls,
     if fetcher is None:
         fetcher = fetch_rendered_html
     for url in urls:
+        if dosel_cas():
+            break
         try:
             page_html = fetcher(browser, url)
         except Exception as e:
-            print(f"{source_label} hotel chyba ({url}): {e}")
+            _zaznamenej_chybu_zdroje(f"{source_label} hotel", url, e)
             continue
         soup = BeautifulSoup(page_html, "html.parser")
         hotel = _hotel_z_cesty(url)
@@ -2052,7 +2151,7 @@ def check_cedok(seen, updates, stats, notify, browser):
         try:
             page_html = fetch_cedok_html(browser, url)
         except Exception as e:
-            print(f"Čedok chyba ({url}): {e}")
+            _zaznamenej_chybu_zdroje("Čedok", url, e)
             continue
         soup = BeautifulSoup(page_html, "html.parser")
         found = 0
@@ -2090,7 +2189,7 @@ def check_eximtours(seen, updates, stats, notify, browser):
         try:
             page_html = fetch_rendered_html(browser, url)
         except Exception as e:
-            print(f"Exim Tours chyba ({url}): {e}")
+            _zaznamenej_chybu_zdroje("Exim Tours", url, e)
             continue
         soup = BeautifulSoup(page_html, "html.parser")
         diagnostika_vypis(soup, "Exim Tours")
@@ -2117,7 +2216,7 @@ def check_fischer(seen, updates, stats, notify, browser):
         try:
             page_html = fetch_rendered_html(browser, url)
         except Exception as e:
-            print(f"Fischer chyba ({url}): {e}")
+            _zaznamenej_chybu_zdroje("Fischer", url, e)
             continue
         soup = BeautifulSoup(page_html, "html.parser")
         diagnostika_vypis(soup, "Fischer")
@@ -2138,7 +2237,7 @@ def check_dovolenkovani(seen, updates, stats, notify, browser):
         try:
             page_html = fetch_rendered_html(browser, url)
         except Exception as e:
-            print(f"Dovolenkovani chyba ({url}): {e}")
+            _zaznamenej_chybu_zdroje("Dovolenkovani", url, e)
             continue
         soup = BeautifulSoup(page_html, "html.parser")
         found = 0
@@ -2168,7 +2267,7 @@ def main():
 
     # Naučená mapa "ID cestovky -> jméno". Drží se mezi běhy v ck.json,
     # takže detail nabídky se kvůli jménu otevírá jen u nové cestovky.
-    global _ck_mapa, _hodina_behu, _aktualni_browser
+    global _ck_mapa, _hodina_behu, _aktualni_browser, _chyby_zdroje
     _ck_mapa = load_ck()
 
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -2196,6 +2295,7 @@ def main():
         _aktualni_browser = browser   # kvůli dohledání jména neznámé CK
         try:
             # Každý zdroj běží samostatně - pád jednoho nezastaví ostatní.
+            nefunkcni_zdroje = []
             zdroje = [
                 ("Invia", check_invia),
                 ("Blue Style", check_bluestyle),
@@ -2204,11 +2304,28 @@ def main():
                 ("Fischer", check_fischer),
                 ("Dovolenkovani", check_dovolenkovani),
             ]
+            # ROTACE: kdyby se pořadí nikdy neměnilo, zdroje na konci
+            # seznamu by se při vyčerpání času nikdy nedostaly ke slovu.
+            # Každý běh proto začíná o jeden zdroj dál.
+            start = stats.get("zdroj_start", 0) % len(zdroje)
+            zdroje = zdroje[start:] + zdroje[:start]
+            stats["zdroj_start"] = (start + 1) % len(zdroje)
+
             for nazev, fn in zdroje:
+                if dosel_cas():
+                    print(f"Zdroj {nazev} přeskočen – došel čas.")
+                    continue
+                _chyby_zdroje = 0   # každý zdroj začíná s čistým počítadlem
+                zacatek = time.monotonic()
                 try:
                     fn(seen, updates, stats, notify=not first_run, browser=browser)
+                except ZdrojSeVzdal as e:
+                    print(f"Zdroj {nazev} vynechán: {e}")
+                    nefunkcni_zdroje.append(nazev)
                 except Exception as e:
                     print(f"CHYBA zdroje {nazev} (pokračuji dalšími): {e}")
+                    nefunkcni_zdroje.append(nazev)
+                print(f"[{nazev}] hotovo za {time.monotonic() - zacatek:.0f} s.")
         finally:
             _aktualni_browser = None
             browser.close()
@@ -2243,6 +2360,14 @@ def main():
 
     save_stats(stats)
     save_ck(_ck_mapa)
+
+    # Jedna souhrnná zpráva o nefunkčních zdrojích. Bez ní zdroj umře
+    # potichu (Fischer měl v seen.json jen 4 záznamy) a poznáš to až po
+    # týdnech, kdy si všimneš, že odtud nic nechodí.
+    if nefunkcni_zdroje and not first_run:
+        seznam = ", ".join(dict.fromkeys(nefunkcni_zdroje))
+        send_telegram(f"⚠️ <b>Zdroj nevrátil nabídky</b>\n{html.escape(seznam)}\n"
+                      f"<i>Podrobnosti v logu běhu na GitHubu.</i>", tise=True)
     if updates:
         print(f"Zpracováno {len(updates)} nových/aktualizovaných nabídek.")
     else:
